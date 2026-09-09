@@ -1,0 +1,857 @@
+/* Valorisation Paris 8 — feuille de style unique.
+   Palette papier froid, encre bleu-nuit, un vert de signal pour l'interaction,
+   un orange réservé aux alertes et aux mises à l'écart — jamais décoratif.
+   Chiffres en Mono tabulaire : les colonnes s'alignent, les ordres de grandeur
+   se comparent à l'œil. */
+
+:root {
+  --papier:    #F3F5F4;
+  --carte:     #FFFFFF;
+  --encre:     #16232B;
+  --encre-2:   #52646E;
+  --encre-3:   #7C8B93;
+  --filet:     #D9DFDD;
+  --filet-doux:#EAEEEC;
+  --signal:    #0B6E5F;
+  --signal-2:  #E1EFE9;
+  --alerte:    #A8471A;
+  --alerte-2:  #FAEDE5;
+
+  --titre: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --corps: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono:  "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --ecart: 20px;
+  --rayon: 3px;
+
+  /* Ombres et voiles déclarés en variables : ils diffèrent trop entre les
+     deux thèmes pour être écrits en dur (une ombre noire ne se voit pas sur
+     fond sombre, il y faut une bordure claire). */
+  --ombre-carte:  0 1px 2px rgba(20,35,43,.10);
+  --ombre-modale: 0 12px 40px rgba(22,35,43,.25);
+  --voile-fond:   rgba(243,245,244,.96);
+  --modale-fond:  rgba(22,35,43,.5);
+  --barre-fond:   var(--encre);
+  --barre-texte:  #FFFFFF;
+  --barre-doux:   rgba(255,255,255,.62);
+  --barre-filet:  rgba(255,255,255,.35);
+  --barre-survol: #23343D;
+}
+
+/* Thème sombre.
+   Ce n'est pas le thème clair inversé : sur fond sombre, un blanc pur éblouit
+   et les aplats saturés vibrent. L'encre devient un gris clair légèrement
+   chaud, et les couleurs de signal sont éclaircies pour rester lisibles sur
+   fond foncé — un vert profond y disparaîtrait. */
+[data-theme="sombre"] {
+  --papier:    #14181B;
+  --carte:     #1C2226;
+  --encre:     #DDE3E5;
+  --encre-2:   #A3AFB4;
+  --encre-3:   #7B888D;
+  --filet:     #2E373C;
+  --filet-doux:#242C31;
+  --signal:    #4FB3A0;
+  --signal-2:  #1E3733;
+  --alerte:    #E08A5F;
+  --alerte-2:  #3A2418;
+
+  --ombre-carte:  0 1px 2px rgba(0,0,0,.4);
+  --ombre-modale: 0 12px 40px rgba(0,0,0,.6);
+  --voile-fond:   rgba(20,24,27,.96);
+  --modale-fond:  rgba(0,0,0,.62);
+  --barre-fond:   #0E1214;
+  --barre-texte:  #DDE3E5;
+  --barre-doux:   rgba(221,227,229,.55);
+  --barre-filet:  rgba(221,227,229,.28);
+  --barre-survol: #2A3338;
+}
+
+/* Le navigateur doit connaître le thème : il en dépend pour colorer les
+   barres de défilement, les champs de saisie et les menus déroulants. */
+:root { color-scheme: light; }
+[data-theme="sombre"] { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+
+/* Un élément portant `hidden` doit rester caché, quelle que soit la règle de
+   disposition qui le concerne par ailleurs. Sans cette ligne, une déclaration
+   comme `.modale { display: flex }` l'emporte sur le `display: none` de la
+   feuille du navigateur, et l'élément reste affiché alors que le code le croit
+   masqué — panne d'autant plus déroutante qu'elle ne produit aucune erreur. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--papier);
+  color: var(--encre);
+  font-family: var(--corps);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { font-family: var(--titre); margin: 0; letter-spacing: .01em; }
+
+main { max-width: 1440px; margin: 0 auto; padding: 0 24px 72px; }
+
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- Bandeau ---------- */
+
+.bandeau { background: var(--carte); border-bottom: 1px solid var(--filet); }
+.bandeau-inner {
+  max-width: 1440px; margin: 0 auto; padding: 18px 24px;
+  display: flex; align-items: center; gap: 28px;
+}
+.surtitre {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--signal); margin: 0 0 4px;
+}
+.bandeau h1 { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.bandeau-actions { margin-left: auto; display: flex; gap: 8px; }
+
+.onglets { display: flex; gap: 4px; background: var(--papier); padding: 4px; border-radius: var(--rayon); }
+.onglet {
+  font-family: var(--corps); font-size: 14px; font-weight: 500;
+  padding: 8px 16px; border: 0; background: transparent;
+  color: var(--encre-2); border-radius: var(--rayon); cursor: pointer;
+}
+.onglet:hover { color: var(--encre); }
+.onglet.actif { background: var(--carte); color: var(--signal); font-weight: 600;
+  box-shadow: var(--ombre-carte); }
+
+/* ---------- Barre de légende ---------- */
+
+.legende-barre {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--barre-fond); color: var(--barre-texte);
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 24px;
+}
+.legende-corps { flex: 1; min-width: 0; }
+.legende-texte {
+  margin: 0; font-size: 14px; line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.legende-source { margin: 2px 0 0; font-size: 12px; color: var(--barre-doux); }
+.legende-barre .btn {
+  background: transparent; border-color: var(--barre-filet);
+  color: var(--barre-texte); flex: none;
+}
+.legende-barre .btn:hover {
+  background: var(--barre-survol); border-color: var(--barre-survol);
+}
+
+/* ---------- Disposition ---------- */
+
+.disposition {
+  display: grid; grid-template-columns: 290px 1fr;
+  gap: var(--ecart); margin-top: 24px; align-items: start;
+}
+.colonne-filtres {
+  background: var(--carte); border: 1px solid var(--filet); border-radius: var(--rayon);
+  padding: 18px; position: sticky; top: 78px; max-height: calc(100vh - 96px);
+  overflow-y: auto;
+}
+.colonne-filtres::-webkit-scrollbar { width: 6px; }
+.colonne-filtres::-webkit-scrollbar-thumb { background: var(--filet); border-radius: 3px; }
+
+.titre-tableau { font-size: 21px; font-weight: 600; margin-bottom: 14px; }
+
+/* ---------- Contrôles ---------- */
+
+.btn {
+  font-family: var(--corps); font-size: 14px; font-weight: 500;
+  padding: 8px 15px; border: 1px solid var(--signal);
+  background: var(--signal); color: var(--papier);
+  border-radius: var(--rayon); cursor: pointer;
+}
+.btn:hover { filter: brightness(.9); }
+.btn-fantome { background: transparent; color: var(--signal); }
+.btn-fantome:hover { background: var(--signal-2); color: var(--signal); }
+.btn-petit { font-size: 13px; padding: 6px 12px; background: transparent; color: var(--signal); }
+.btn-petit:hover { background: var(--signal-2); color: var(--signal); }
+
+.lien {
+  background: none; border: 0; padding: 0; margin-top: 8px;
+  color: var(--signal); font: inherit; font-size: 13px;
+  cursor: pointer; text-decoration: underline;
+}
+.lien:hover { color: var(--encre); }
+
+input[type=text], input[type=search], input[type=url], input[type=password], select {
+  width: 100%; font-family: var(--corps); font-size: 14px;
+  padding: 8px 10px; border: 1px solid var(--filet);
+  border-radius: var(--rayon); background: var(--carte); color: var(--encre);
+}
+input:focus, select:focus { outline: 2px solid var(--signal-2); border-color: var(--signal); }
+
+.etiquette-champ {
+  display: block; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--encre-3); margin: 0 0 6px;
+}
+.note { font-size: 13px; color: var(--encre-2); margin: 8px 0 0; }
+.note-alerte { color: var(--alerte); }
+.note-etape {
+  background: var(--signal-2); border-left: 3px solid var(--signal);
+  padding: 12px 14px; border-radius: var(--rayon); margin-top: var(--ecart);
+}
+
+.bloc { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--filet-doux); }
+
+/* ---------- Facettes ---------- */
+
+.facette { margin-top: 22px; }
+.facette-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.facette-tete h3 {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--encre-3); font-weight: 500;
+}
+.facette-tete .lien { margin-top: 0; font-size: 12px; }
+.facette-recherche { margin: 7px 0 4px; font-size: 13px !important; padding: 5px 8px !important; }
+
+.facette-liste { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.facette-liste::-webkit-scrollbar { width: 5px; }
+.facette-liste::-webkit-scrollbar-thumb { background: var(--filet); border-radius: 3px; }
+.facette-liste li { display: flex; align-items: center; gap: 7px; padding: 2px 0; position: relative; }
+.facette-liste input[type=checkbox] { margin: 0; accent-color: var(--signal); flex: none; cursor: pointer; }
+.facette-liste label {
+  flex: 1; font-size: 13.5px; cursor: pointer; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+.valeur-absente { color: var(--encre-3); font-style: italic; }
+.facette-nombre {
+  font-family: var(--mono); font-size: 11px; color: var(--encre-3);
+  font-variant-numeric: tabular-nums; flex: none;
+}
+.facette-action {
+  visibility: hidden; flex: none; background: none; border: 0;
+  padding: 0 2px; font-size: 13px; line-height: 1;
+  color: var(--encre-3); cursor: pointer;
+}
+.facette-liste li:hover .facette-action,
+.facette-liste li:focus-within .facette-action { visibility: visible; }
+.action-seul:hover    { color: var(--signal); }
+.action-masquer:hover { color: var(--alerte); }
+
+/* ---------- Puces (valeurs masquées) ---------- */
+
+.puce {
+  display: inline-flex; align-items: center; gap: 5px;
+  max-width: 100%; margin: 0 5px 5px 0; padding: 3px 9px;
+  background: var(--alerte-2); border: 1px solid var(--alerte);
+  color: var(--alerte); border-radius: 12px;
+  font-family: var(--corps); font-size: 12px; cursor: pointer;
+}
+.puce span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+.puce:hover { background: var(--alerte); color: var(--carte); }
+
+/* ---------- Profils ---------- */
+
+.profil-ligne { display: flex; gap: 6px; margin-bottom: 8px; }
+.profil-ligne select, .profil-ligne input { flex: 1; min-width: 0; }
+.profil-ligne .btn { flex: none; }
+
+/* ---------- Indicateurs ---------- */
+
+.indicateurs {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px; background: var(--filet);
+  border: 1px solid var(--filet); border-radius: var(--rayon);
+  overflow: hidden; margin-bottom: var(--ecart);
+}
+.indicateur { background: var(--carte); padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; }
+.indicateur-valeur {
+  font-family: var(--mono); font-size: 24px; font-weight: 500;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.indicateur-libelle { font-size: 12.5px; color: var(--encre-2); }
+
+/* ---------- Panneaux ---------- */
+
+.panneau {
+  background: var(--carte); border: 1px solid var(--filet);
+  border-radius: var(--rayon); padding: 20px; margin-bottom: var(--ecart);
+}
+.panneau-tete { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.panneau-tete h2 { font-size: 17px; font-weight: 600; }
+.panneau-tete .mono { font-size: 13px; color: var(--encre-2); }
+.panneau-tete .btn { margin-left: auto; }
+
+/* ---------- Tableau ---------- */
+
+.tableau-hote { margin-top: 12px; overflow-x: auto; }
+.tableau { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.tableau th {
+  text-align: left; font-family: var(--mono); font-size: 11px;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--encre-3);
+  font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--filet);
+  position: sticky; top: 0; background: var(--carte); z-index: 1;
+}
+.tableau th.triable { cursor: pointer; user-select: none; }
+.tableau th.triable:hover { color: var(--signal); }
+.tableau th.tri-asc::after  { content: " ↑"; color: var(--signal); }
+.tableau th.tri-desc::after { content: " ↓"; color: var(--signal); }
+/* Le texte revient à la ligne plutôt que d'être coupé : dans une base
+   documentaire, les intitulés sont longs et un libellé tronqué est
+   illisible — or c'est justement le contenu qu'on vient vérifier ici. */
+.tableau td {
+  padding: 7px 10px; border-bottom: 1px solid var(--filet-doux);
+  vertical-align: top; white-space: normal; overflow-wrap: anywhere;
+  hyphens: auto;
+}
+.tableau { table-layout: auto; }
+.tableau-ligne { cursor: pointer; }
+.tableau-ligne:hover td { background: var(--signal-2); }
+.tableau-detail td {
+  white-space: normal; background: var(--papier);
+  padding: 12px 14px; font-size: 13px; color: var(--encre-2);
+}
+.tableau-detail p { margin: 0 0 6px; }
+
+/* ---------- Voile de chargement ---------- */
+
+.voile {
+  position: fixed; inset: 0; z-index: 90;
+  background: var(--voile-fond);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  text-align: center; padding: 24px;
+}
+.rouet {
+  width: 30px; height: 30px; margin: 0 auto 10px;
+  border: 3px solid var(--filet); border-top-color: var(--signal);
+  border-radius: 50%; animation: tourne .8s linear infinite;
+}
+@keyframes tourne { to { transform: rotate(360deg); } }
+#voile-erreur h2 { font-size: 18px; margin-bottom: 6px; }
+
+/* ---------- Modale ---------- */
+
+.modale {
+  position: fixed; inset: 0; z-index: 95;
+  background: var(--modale-fond);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.modale-carte {
+  background: var(--carte); border-radius: var(--rayon);
+  padding: 22px; width: min(520px, 100%);
+  box-shadow: var(--ombre-modale);
+}
+.modale-tete { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.modale-tete h2 { font-size: 18px; }
+.modale-carte .etiquette-champ { margin-top: 14px; }
+.modale-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+/* ---------- Messages ---------- */
+
+.messages { position: fixed; top: 14px; right: 14px; z-index: 100; display: flex; flex-direction: column; gap: 6px; }
+.message {
+  background: var(--barre-fond); color: var(--barre-texte); margin: 0;
+  padding: 10px 14px; border-radius: var(--rayon);
+  font-size: 13px; box-shadow: var(--ombre-modale);
+  transition: opacity .35s;
+}
+
+/* ---------- Écrans étroits ---------- */
+
+@media (max-width: 1000px) {
+  .disposition { grid-template-columns: 1fr; }
+  .colonne-filtres { position: static; max-height: none; }
+  .bandeau-inner { flex-wrap: wrap; gap: 14px; }
+  .legende-barre { flex-direction: column; align-items: stretch; }
+}
+
+/* ---------- Figures ---------- */
+
+.figure-corps { margin-top: 14px; }
+/* `overflow: visible` laisse les libellés dépasser légèrement du cadre, ce
+   qui est voulu sur les figures fixes. Le réseau, lui, est zoomable : sans
+   découpe, son contenu agrandi déborderait sur le reste de la page. */
+.figure { display: block; overflow: visible; }
+.figure-constellation { overflow: hidden; }
+
+.figure-libelle { font-family: var(--corps); font-size: 12.5px; }
+.figure-valeur {
+  font-family: var(--mono); font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.figure-axe { font-family: var(--mono); font-size: 11px; }
+
+/* Toute la ligne réagit, pas seulement la barre : viser une barre courte
+   serait pénible. */
+.barre, .colonne, .segment { cursor: pointer; }
+.barre:hover .barre-remplissage,
+.colonne:hover .colonne-remplissage { fill-opacity: 1; }
+.barre:hover .barre-zone,
+.colonne:hover .colonne-zone { fill: var(--signal-2); }
+.segment:hover { fill-opacity: 1; }
+.barre:focus-visible, .colonne:focus-visible, .segment:focus-visible {
+  outline: 2px solid var(--signal); outline-offset: 1px;
+}
+.barre:focus, .colonne:focus, .segment:focus { outline: none; }
+
+.figure-legende {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px;
+}
+.figure-legende-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 0;
+  font-family: var(--corps); font-size: 12.5px; color: var(--encre-2);
+  cursor: pointer;
+}
+button.figure-legende-item:hover { color: var(--signal); }
+.figure-pastille {
+  width: 11px; height: 11px; border-radius: 2px; flex: none;
+}
+
+.reglage-detail { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.reglage-detail .etiquette-champ { margin: 0; }
+.reglage-detail select { width: auto; padding: 4px 8px; font-size: 13px; }
+
+/* Contenu d'un regroupement « Autres » */
+.autres-detail {
+  margin-top: 14px; padding: 12px 14px;
+  background: var(--papier); border-radius: var(--rayon);
+}
+.autres-liste {
+  list-style: none; margin: 8px 0 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px;
+}
+.autres-valeur {
+  display: flex; justify-content: space-between; gap: 10px; width: 100%;
+  background: none; border: 0; padding: 3px 6px; border-radius: 2px;
+  font-family: var(--corps); font-size: 13px; color: var(--encre);
+  text-align: left; cursor: pointer;
+}
+.autres-valeur:hover { background: var(--signal-2); color: var(--signal); }
+.autres-valeur.choisie { background: var(--signal); color: var(--papier); }
+.autres-nombre {
+  font-family: var(--mono); font-size: 11px; color: var(--encre-3); flex: none;
+}
+.autres-valeur.choisie .autres-nombre { color: var(--papier); opacity: .75; }
+
+/* ---------- Panneau partenaires ---------- */
+
+.partenaires-outils {
+  display: flex; align-items: center; gap: 12px; margin: 12px 0 4px;
+}
+.partenaires-outils input { max-width: 280px; }
+.partenaires-outils .note { margin: 0; }
+.colonne-nombre { text-align: right; font-family: var(--mono);
+  font-variant-numeric: tabular-nums; }
+.ligne-choisie td { background: var(--signal-2); }
+.ligne-choisie td:first-child { box-shadow: inset 3px 0 0 var(--signal); }
+
+/* ---------- Configuration à onglets ---------- */
+
+.onglets-modale { margin-bottom: 16px; }
+.onglets-modale .onglet { font-size: 13.5px; padding: 6px 14px; }
+.volet { animation: apparition .16s ease-out; }
+@keyframes apparition { from { opacity: 0; } to { opacity: 1; } }
+.volet .modale-actions { margin-top: 20px; }
+.volet select { margin-bottom: 4px; }
+
+/* Une durée porte une explication au survol : le curseur l'annonce. */
+.cellule-duree { cursor: help; }
+
+
+/* ---------- Transition entre thèmes ---------- */
+
+/* Le basculement ne doit pas donner l'impression d'un rechargement, mais
+   l'animation est coupée pour qui la refuse. */
+body, .bandeau, .colonne-filtres, .panneau, .indicateur,
+.legende-barre, .modale-carte, .tableau td, .tableau th {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: .001ms !important;
+    animation-duration: .001ms !important;
+  }
+}
+
+/* ---------- Relations ---------- */
+
+.onglets-vue { display: inline-flex; margin-bottom: 4px; }
+.onglets-vue .onglet { font-size: 13.5px; padding: 6px 14px; }
+
+.relations-reglages { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 14px; }
+.relations-reglages .reglage-detail { margin-left: 0; }
+
+.lien-relation { transition: stroke-opacity .15s; }
+.lien-relation:hover { stroke-opacity: 1; }
+
+.reseau-noeud { cursor: pointer; }
+.reseau-noeud:hover circle { fill-opacity: 1; }
+.reseau-noeud:focus-visible circle { stroke: var(--signal); stroke-width: 2.5; }
+.reseau-noeud:focus { outline: none; }
+
+/* ---------- Matrice ---------- */
+
+.matrice-enveloppe { overflow: auto; max-height: 70vh; margin-top: 12px; }
+.matrice { border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.matrice th, .matrice td { border-bottom: 1px solid var(--filet-doux); }
+
+/* Les en-têtes restent visibles au défilement : une matrice large se lit mal
+   dès qu'on perd de vue à quoi correspond la colonne qu'on regarde. */
+.matrice-coin {
+  position: sticky; left: 0; top: 0; z-index: 3;
+  background: var(--carte); text-align: left !important;
+  font-size: 10.5px !important; min-width: 150px;
+}
+.matrice-tete {
+  position: sticky; top: 0; z-index: 2; background: var(--carte);
+  height: 130px; vertical-align: bottom; padding: 0 !important;
+  min-width: 30px; max-width: 30px;
+}
+/* Libellés de colonnes à la verticale : seule façon de faire tenir
+   une quinzaine de partenaires sans les tronquer. */
+.matrice-tete span {
+  display: block; writing-mode: vertical-rl; transform: rotate(180deg);
+  max-height: 122px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; padding: 4px 0; font-weight: 500;
+  text-transform: none; letter-spacing: 0; font-size: 11.5px;
+  color: var(--encre-2);
+}
+.matrice-nom {
+  position: sticky; left: 0; z-index: 1; background: var(--carte);
+  white-space: nowrap; max-width: 200px; overflow: hidden;
+  text-overflow: ellipsis; font-size: 12.5px;
+}
+.matrice-cellule {
+  text-align: center; font-family: var(--mono); font-size: 11.5px;
+  font-variant-numeric: tabular-nums; min-width: 30px;
+}
+.matrice-total { background: var(--papier); font-weight: 600; }
+.matrice .triable:hover { color: var(--signal); }
+
+/* ---------- Menu contextuel ---------- */
+
+.menu-contextuel {
+  position: fixed; z-index: 200;
+  min-width: 232px; max-width: 320px;
+  background: var(--carte); border: 1px solid var(--filet);
+  border-radius: var(--rayon); box-shadow: var(--ombre-modale);
+  padding: 4px 0; overflow: hidden;
+}
+.menu-titre {
+  padding: 8px 14px 6px; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .06em; color: var(--encre-3);
+  border-bottom: 1px solid var(--filet-doux); margin-bottom: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.menu-entree {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 7px 14px; border: 0; background: none;
+  font-family: var(--corps); font-size: 13.5px; color: var(--encre);
+  text-align: left; cursor: pointer;
+}
+.menu-entree:hover, .menu-entree:focus {
+  background: var(--signal-2); color: var(--signal); outline: none;
+}
+.menu-danger:hover, .menu-danger:focus {
+  background: var(--alerte-2); color: var(--alerte);
+}
+.menu-aide {
+  font-family: var(--mono); font-size: 10.5px; color: var(--encre-3); flex: none;
+}
+.menu-separateur {
+  height: 1px; background: var(--filet-doux); margin: 4px 0;
+}
+
+/* ---------- Relations : barre de réglages ---------- */
+
+.relations-barre {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; margin-bottom: 4px;
+}
+.relations-axes { display: flex; align-items: flex-end; gap: 10px; }
+.relations-axes .reglage-detail { margin-left: 0; }
+.relations-axes .btn { margin-bottom: 1px; }
+
+/* Survol d'une entrée : les liens sans rapport s'effacent. */
+.lien-efface { stroke-opacity: .06 !important; }
+
+.cellule-actionnable { cursor: context-menu; }
+
+/* ---------- Mise en avant des relations ---------- */
+
+.relations-surbrillance {
+  display: flex; align-items: center; gap: 10px;
+  margin: 6px 0 2px; font-size: 13px;
+}
+.surbrillance-actuelle {
+  font-family: var(--mono); font-size: 11.5px;
+  background: var(--signal-2); color: var(--signal);
+  padding: 2px 8px; border-radius: 12px;
+  max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.relations-surbrillance .lien { margin-top: 0; }
+.entree-attenuee { opacity: .3; }
+.entree-attenuee text { transition: opacity .12s; }
+
+/* ---------- Fenêtre de liste ---------- */
+
+.modale-liste { width: min(620px, 100%); display: flex; flex-direction: column; max-height: 82vh; }
+.modale-liste input[type=search] { margin-top: 4px; }
+.liste-valeurs {
+  list-style: none; margin: 6px 0 0; padding: 0;
+  overflow-y: auto; flex: 1; min-height: 120px;
+  border: 1px solid var(--filet); border-radius: var(--rayon);
+}
+.liste-valeurs::-webkit-scrollbar { width: 6px; }
+.liste-valeurs::-webkit-scrollbar-thumb { background: var(--filet); border-radius: 3px; }
+.liste-ligne {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 12px; border-bottom: 1px solid var(--filet-doux);
+}
+.liste-ligne:last-child { border-bottom: 0; }
+.liste-ligne:hover { background: var(--papier); }
+.liste-ligne.choisie { background: var(--signal-2); }
+.liste-nom {
+  flex: 1; font-size: 13.5px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.liste-nombre {
+  font-family: var(--mono); font-size: 11.5px; color: var(--encre-3);
+  font-variant-numeric: tabular-nums; flex: none;
+}
+.liste-actions { display: flex; gap: 4px; flex: none; }
+.liste-action {
+  border: 1px solid var(--filet); background: var(--carte);
+  border-radius: var(--rayon); padding: 2px 8px;
+  font-family: var(--corps); font-size: 11.5px; color: var(--encre-2);
+  cursor: pointer;
+}
+.liste-action:hover { border-color: var(--signal); color: var(--signal); }
+.liste-danger:hover { border-color: var(--alerte); color: var(--alerte); }
+
+.cellule-masquee { color: var(--encre-3); font-family: var(--mono); cursor: help; }
+
+/* Valeur détachée d'un regroupement : elle figure dans la liste comme dans
+   la figure, et l'action première de la fenêtre est mise en avant. */
+.liste-ligne.epinglee { background: color-mix(in srgb, var(--signal) 8%, transparent); }
+.liste-ligne.epinglee .liste-nom::before { content: '▸ '; color: var(--signal); }
+.liste-primaire {
+  border-color: var(--signal) !important; color: var(--signal) !important;
+  font-weight: 500;
+}
+.liste-primaire:hover { background: var(--signal-2); }
+
+/* ---------- Diagramme de flux ---------- */
+
+.flux-noeud { cursor: pointer; }
+.flux-noeud:hover .flux-barre { fill-opacity: 1; }
+.flux-noeud:focus-visible .flux-barre { stroke: var(--signal); stroke-width: 2; }
+.flux-noeud:focus { outline: none; }
+.flux-ruban { transition: fill-opacity .15s; }
+.flux-ruban:hover { fill-opacity: .6 !important; }
+.flux-ruban.lien-efface { fill-opacity: .04 !important; }
+
+/* ---------- Panneaux repliables ---------- */
+
+.qualite-bascule {
+  display: flex; align-items: baseline; gap: 8px;
+  background: none; border: 0; padding: 0;
+  cursor: pointer; font-family: var(--titre); color: var(--encre);
+}
+.qualite-bascule:hover h2 { color: var(--signal); }
+.qualite-bascule h2 { font-size: 17px; font-weight: 600; }
+.qualite-fleche { color: var(--encre-3); font-size: 12px; }
+.qualite-resume { font-size: 13px; color: var(--encre-2); }
+.qualite-attention { color: var(--alerte); font-weight: 500; }
+
+/* ---------- Constats ---------- */
+
+.qualite-liste { margin-top: 14px; display: grid; gap: 12px; }
+.constat {
+  border: 1px solid var(--filet); border-radius: var(--rayon);
+  padding: 12px 14px; border-left-width: 3px;
+}
+.constat-information { border-left-color: var(--filet); }
+.constat-attention   { border-left-color: var(--alerte); }
+.constat-tete {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+}
+.constat-tete h3 { font-size: 14.5px; font-weight: 600; }
+.constat-chiffre {
+  font-family: var(--mono); font-size: 12.5px; color: var(--encre-2);
+  font-variant-numeric: tabular-nums; flex: none;
+}
+.constat-attention .constat-chiffre { color: var(--alerte); }
+.constat .note { margin-top: 4px; }
+.constat-actions { display: flex; gap: 14px; margin-top: 6px; flex-wrap: wrap; }
+.constat-actions .lien { margin-top: 0; }
+.constat-exemples, .constat-groupes {
+  list-style: none; margin: 10px 0 0; padding: 10px 12px;
+  background: var(--papier); border-radius: var(--rayon);
+  font-size: 13px; display: grid; gap: 4px;
+}
+.constat-exemples li { color: var(--encre-2); }
+.variante {
+  background: none; border: 0; padding: 1px 4px; border-radius: 2px;
+  font-family: var(--corps); font-size: 13px; color: var(--encre);
+  cursor: pointer; text-decoration: underline dotted;
+}
+.variante:hover { background: var(--signal-2); color: var(--signal); }
+
+/* ---------- Atelier ---------- */
+
+.atelier-reglages {
+  display: flex; gap: 18px; flex-wrap: wrap; margin: 12px 0 4px;
+}
+.atelier-reglages .reglage-detail { margin-left: 0; }
+
+/* ---------- Export de figure ---------- */
+
+.export-figure { margin-left: auto; display: flex; gap: 6px; }
+.export-figure .btn { min-width: 46px; }
+
+/* ---------- Réseau en constellation ---------- */
+
+.reseau-reglages { margin-left: auto; display: flex; gap: 16px; }
+.reseau-reglages .reglage-detail { margin-left: 0; }
+.constellation-pole { cursor: pointer; }
+.constellation-pole:hover .pole-disque { fill-opacity: 1; }
+.constellation-pole:focus-visible .pole-disque { stroke: var(--signal); stroke-width: 3; }
+.constellation-pole:focus { outline: none; }
+.constellation-individu { transition: fill-opacity .12s; }
+.constellation-individu:hover { fill-opacity: 1 !important; }
+.frise-segment { transition: fill-opacity .12s; }
+.frise-segment:hover { fill-opacity: .7 !important; }
+
+/* ---------- Infobulle ---------- */
+
+.infobulle {
+  position: fixed; z-index: 250; pointer-events: none;
+  max-width: 340px;
+  background: var(--barre-fond); color: var(--barre-texte);
+  border-radius: var(--rayon); padding: 9px 12px;
+  box-shadow: var(--ombre-modale);
+  font-size: 12.5px; line-height: 1.45;
+}
+.infobulle[hidden] { display: none; }
+.infobulle-titre { font-weight: 600; margin-bottom: 2px; }
+.infobulle-precision {
+  font-family: var(--mono); font-size: 11px; color: var(--barre-doux);
+}
+.infobulle-liste {
+  list-style: none; margin: 6px 0 0; padding: 6px 0 0;
+  border-top: 1px solid var(--barre-filet); display: grid; gap: 3px;
+}
+.infobulle-liste li { display: flex; flex-direction: column; }
+.infobulle-secondaire {
+  font-family: var(--mono); font-size: 10.5px; color: var(--barre-doux);
+}
+
+/* ---------- Réseau : rendu d'origine ---------- */
+
+.figure-constellation { cursor: grab; }
+.figure-constellation:active { cursor: grabbing; }
+.constellation-enveloppe { transition: fill-opacity .2s; }
+.constellation-individu { cursor: pointer; }
+.constellation-individu:hover .individu-disque {
+  fill-opacity: 1 !important; stroke-width: 2;
+}
+.constellation-individu:focus-visible .individu-disque {
+  stroke: var(--signal); stroke-width: 2.5;
+}
+.constellation-individu:focus { outline: none; }
+.nom-individu { font-size: 9px; transition: opacity .18s; }
+.nom-pole {
+  font-family: var(--titre); font-size: 12px; font-weight: 600;
+  letter-spacing: .02em; text-transform: uppercase;
+}
+.effectif-pole { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.constellation-pole:hover .pole-anneau { stroke: var(--signal); }
+
+.vue-commandes {
+  display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+}
+.vue-commandes .btn { min-width: 34px; }
+.vue-commandes .note { margin: 0 0 0 6px; }
+
+/* ---------- Repli d'une figure ---------- */
+
+/* Discret au repos, net au survol : la commande ne doit pas concurrencer la
+   figure, mais rester trouvable sans chercher. */
+.replier {
+  background: none; border: 0; padding: 0 2px;
+  color: var(--encre-3); font-size: 11px; line-height: 1;
+  cursor: pointer; opacity: .5; transition: opacity .12s, color .12s;
+}
+.panneau-tete:hover .replier { opacity: 1; }
+.replier:hover { color: var(--signal); opacity: 1; }
+.replier:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; opacity: 1; }
+.panneau-replie { padding-bottom: 14px; }
+.panneau-replie .panneau-tete { margin: 0; }
+.panneau-replie h2 { color: var(--encre-2); font-weight: 500; }
+
+/* ---------- Barres empilées ---------- */
+
+.segment-empile { transition: fill-opacity .12s; }
+.segment-empile:hover { fill-opacity: 1 !important; }
+.reglage-mode { margin-left: auto; }
+.reglage-mode select { max-width: 260px; }
+
+/* ---------- Bouton de sens ---------- */
+
+.bouton-sens {
+  background: none; border: 1px solid transparent; border-radius: var(--rayon);
+  padding: 2px 7px; margin-left: 4px;
+  color: var(--encre-3); font-size: 13px; line-height: 1.2;
+  cursor: pointer; opacity: .55; transition: opacity .12s, color .12s;
+}
+.panneau-tete:hover .bouton-sens { opacity: 1; }
+.bouton-sens:hover { color: var(--signal); border-color: var(--filet); opacity: 1; }
+.bouton-sens:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+
+/* ---------- Nuage de mots ---------- */
+
+.mot { cursor: pointer; }
+.mot-texte { transition: fill-opacity .12s; }
+.mot:hover .mot-texte { fill-opacity: 1 !important; text-decoration: underline; }
+.mot:focus-visible .mot-texte { text-decoration: underline; }
+.mot:focus { outline: none; }
+
+/* ---------- Historique et partage ---------- */
+
+.commandes-historique { display: flex; gap: 6px; margin-top: 10px; }
+.commandes-historique .btn { flex: 1; }
+.commandes-historique .btn[disabled] {
+  opacity: .4; cursor: default; color: var(--encre-3);
+}
+.commandes-historique .btn[disabled]:hover { background: none; }
+.legende-actions { display: flex; gap: 6px; flex: none; }
+
+/* ---------- Facettes repliables ---------- */
+
+.facette-bascule {
+  display: flex; align-items: baseline; gap: 6px; flex: 1;
+  background: none; border: 0; padding: 0; cursor: pointer;
+  font-family: var(--titre); color: var(--encre-3); text-align: left;
+}
+.facette-bascule:hover h3 { color: var(--signal); }
+.facette-fleche { font-size: 10px; }
+.facette-compte {
+  font-family: var(--mono); font-size: 10px;
+  background: var(--signal); color: var(--papier);
+  border-radius: 9px; padding: 1px 6px; margin-left: auto;
+}
+.facette-vider {
+  margin-top: 0; font-size: 12px; flex: none; padding: 0 2px;
+}
+.facette-rappel {
+  margin: 3px 0 0 16px; font-size: 12px; color: var(--signal);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.facette-ouverte .facette-tete h3 { color: var(--encre-2); }
+
+/* Une étiquette d'axe agit sur sa colonne entière. */
+.etiquette-axe { cursor: pointer; }
+.etiquette-axe:hover .figure-axe { fill: var(--signal); }
+.etiquette-axe:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.etiquette-axe:focus { outline: none; }

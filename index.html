@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valorisation — Paris 8</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="messages" class="messages"></div>
+
+<header class="bandeau">
+  <div class="bandeau-inner">
+    <div>
+      <p class="surtitre">Université Paris 8 · Omeka S</p>
+      <h1>Valorisation de la recherche</h1>
+    </div>
+    <nav class="onglets" aria-label="Tableau de bord">
+      <button type="button" id="onglet-ope" class="onglet actif">Opérations de partenariat</button>
+      <button type="button" id="onglet-ec"  class="onglet">Enseignants-chercheurs</button>
+    </nav>
+    <div class="bandeau-actions">
+      <button type="button" id="recharger" class="btn btn-fantome btn-petit" title="Vider le cache et réinterroger l’API Omeka S">Recharger les données</button>
+      <button type="button" id="theme-bascule" class="btn btn-fantome btn-petit"
+              aria-live="polite">Thème</button>
+      <button type="button" id="config-ouvrir" class="btn btn-fantome btn-petit">Configuration</button>
+    </div>
+  </div>
+</header>
+
+<div class="legende-barre">
+  <div class="legende-corps">
+    <p id="legende-texte" class="legende-texte">—</p>
+    <p id="legende-source" class="legende-source"></p>
+  </div>
+  <div class="legende-actions">
+    <button type="button" id="copier-lien" class="btn btn-petit">Copier le lien</button>
+    <button type="button" id="legende-copier" class="btn btn-petit">Copier la légende</button>
+  </div>
+</div>
+
+<main>
+  <div class="disposition">
+
+    <aside class="colonne-filtres">
+      <label class="etiquette-champ" for="recherche">Recherche libre</label>
+      <input type="search" id="recherche" placeholder="Nom, partenaire, laboratoire…">
+      <div class="commandes-historique">
+        <button type="button" id="annuler" class="btn btn-petit" disabled>↶ Annuler</button>
+        <button type="button" id="retablir" class="btn btn-petit" hidden>↷ Rétablir</button>
+      </div>
+      <button type="button" id="reinit" class="lien" hidden></button>
+
+      <div id="facettes"></div>
+
+      <section class="bloc">
+        <h3 class="etiquette-champ">Valeurs masquées</h3>
+        <div id="masquees"></div>
+        <p class="note">Le geste ⊘ dans un filtre met une valeur hors périmètre :
+          elle disparaît des comptages et des figures, et la légende en fait mention.</p>
+      </section>
+
+      <section class="bloc">
+        <h3 class="etiquette-champ">Profils de filtres</h3>
+        <div id="profils"></div>
+      </section>
+    </aside>
+
+    <div class="colonne-contenu">
+      <h2 id="titre-tableau" class="titre-tableau">—</h2>
+
+      <section id="indicateurs" class="indicateurs"></section>
+
+      <div id="figures"></div>
+
+      <section class="panneau" id="panneau-reseau" hidden>
+        <div id="reseau-hote"></div>
+      </section>
+
+      <section class="panneau" id="panneau-relations" hidden>
+        <div class="panneau-tete">
+          <h2>Croisements</h2>
+        </div>
+        <p class="note">Deux champs au choix, trois lectures de la même donnée :
+          le détail des liens, les volumes proportionnels, ou les effectifs exacts.
+          Cliquez une valeur pour filtrer le tableau de bord.</p>
+        <div id="relations-hote"></div>
+      </section>
+
+      <section class="panneau" id="panneau-partenaires" hidden>
+        <div class="panneau-tete">
+          <h2>Partenaires</h2>
+          <button type="button" id="export-partenaires" class="btn btn-petit">Exporter en CSV</button>
+        </div>
+        <p class="note">Une ligne par partenaire de la sélection. Cliquez une ligne
+          pour filtrer le tableau de bord sur ce partenaire.</p>
+        <div id="partenaires-hote"></div>
+      </section>
+
+      <section class="panneau">
+        <div class="panneau-tete">
+          <h2>Enregistrements</h2>
+          <p id="tableau-compteur" class="mono"></p>
+          <button type="button" id="export-csv" class="btn btn-petit">Exporter la sélection en CSV</button>
+        </div>
+        <p class="note">Cliquez une ligne pour afficher les informations complémentaires.
+          Cliquez un en-tête de colonne pour trier.</p>
+        <div id="tableau-hote" class="tableau-hote"></div>
+      </section>
+
+      <section class="panneau panneau-repliable" id="panneau-atelier">
+        <div id="atelier-hote"></div>
+      </section>
+
+      <section class="panneau panneau-repliable" id="panneau-qualite">
+        <div id="qualite-hote"></div>
+      </section>
+    </div>
+
+  </div>
+</main>
+
+<div id="voile" class="voile" hidden>
+  <div id="voile-attente">
+    <div class="rouet"></div>
+    <p id="voile-texte">Chargement…</p>
+  </div>
+  <div id="voile-accueil" hidden>
+    <h2>Bienvenue</h2>
+    <p class="note">Cet outil lit une instance Omeka&nbsp;S. Indiquez l’adresse de
+      son API pour commencer&nbsp;; elle sera retenue dans ce navigateur.</p>
+    <p class="note">Par exemple <span class="mono">https://exemple.org/omeka/api/</span></p>
+    <button type="button" id="accueil-configurer" class="btn">Indiquer l’adresse</button>
+  </div>
+
+  <div id="voile-erreur" hidden>
+    <h2>Impossible de charger les données</h2>
+    <p id="voile-erreur-texte" class="note"></p>
+    <p class="note">Adresse interrogée : <span id="voile-adresse" class="mono"></span></p>
+    <p class="note">Si la page est servie depuis une autre origine que l’API,
+      celle-ci doit l’autoriser explicitement (CORS).</p>
+    <button type="button" class="btn" onclick="document.getElementById('config-ouvrir').click()">
+      Ouvrir la configuration
+    </button>
+  </div>
+</div>
+
+<div id="config" class="modale" hidden>
+  <div class="modale-carte" role="dialog" aria-modal="true" aria-labelledby="config-titre">
+    <div class="modale-tete">
+      <h2 id="config-titre">Configuration</h2>
+      <button type="button" id="config-fermer" class="btn btn-petit">Fermer</button>
+    </div>
+
+    <nav class="onglets onglets-modale" aria-label="Sections de la configuration">
+      <button type="button" class="onglet actif" data-volet="volet-connexion">Connexion</button>
+      <button type="button" class="onglet" data-volet="volet-parametres">Paramètres</button>
+      <button type="button" class="onglet" data-volet="volet-diagnostic">Diagnostic</button>
+    </nav>
+
+    <section id="volet-connexion" class="volet">
+      <label class="etiquette-champ" for="cfg-api">Adresse de l’API Omeka S</label>
+      <input type="url" id="cfg-api" placeholder="https://exemple.org/omeka/api/">
+      <label class="etiquette-champ" for="cfg-ident">key_identity (facultatif)</label>
+      <input type="text" id="cfg-ident" autocomplete="off">
+      <label class="etiquette-champ" for="cfg-key">key_credential (facultatif)</label>
+      <input type="password" id="cfg-key" autocomplete="off">
+      <p class="note">Les clés ne sont utiles que si les données ne sont pas publiques.
+        Elles restent dans ce navigateur et ne sont envoyées qu’à l’API indiquée.</p>
+      <p id="cfg-erreur" class="note note-alerte"></p>
+      <div class="modale-actions">
+        <button type="button" id="config-defaut" class="btn btn-petit">Oublier l’adresse</button>
+        <button type="button" id="config-vider" class="btn btn-petit">Vider le cache</button>
+        <button type="button" id="config-enregistrer" class="btn">Enregistrer et recharger</button>
+      </div>
+    </section>
+
+    <section id="volet-parametres" class="volet" hidden>
+      <label class="etiquette-champ" for="pref-theme">Thème</label>
+      <select id="pref-theme">
+        <option value="systeme">Suivre le système</option>
+        <option value="clair">Clair</option>
+        <option value="sombre">Sombre</option>
+      </select>
+      <p class="note">« Suivre le système » reprend le réglage clair ou sombre
+        du système d’exploitation et le suit s’il change.</p>
+
+      <label class="etiquette-champ" for="pref-couleurs">Couleurs des figures</label>
+      <select id="pref-couleurs">
+        <option value="oui">Une couleur par valeur</option>
+        <option value="non">Encre unique</option>
+      </select>
+      <p class="note">Chaque valeur reçoit une teinte tirée de son libellé,
+        donc identique d’une figure à l’autre : un laboratoire se repère d’un
+        panneau au suivant sans relire les intitulés. L’encre unique convient
+        mieux à une impression en noir et blanc.</p>
+
+      <label class="etiquette-champ" for="pref-duree">Affichage des durées</label>
+      <select id="pref-duree">
+        <option value="tranches">Par tranches (moins de 6 mois, 1 à 2 ans…)</option>
+        <option value="mois">En mois</option>
+        <option value="jours">En jours</option>
+      </select>
+      <p class="note">Ce réglage ne touche qu’à l’affichage du tableau. Le filtre
+        « Durée » continue de proposer des tranches : filtrer sur des centaines de
+        valeurs exactes n’aurait pas d’usage. Quel que soit le réglage, survoler
+        une durée en montre les dates et le calcul détaillé.</p>
+
+      <label class="etiquette-champ" for="pref-pas">Lignes affichées à chaque déploiement</label>
+      <select id="pref-pas">
+        <option value="30">30</option>
+        <option value="60">60</option>
+        <option value="120">120</option>
+        <option value="250">250</option>
+      </select>
+
+      <div class="modale-actions">
+        <button type="button" id="pref-defaut" class="btn btn-petit">Valeurs par défaut</button>
+      </div>
+    </section>
+
+    <section id="volet-diagnostic" class="volet" hidden>
+      <p class="note">Utile lorsqu’un champ ressort vide : la propriété
+        interrogée ne porte peut-être pas le nom attendu.</p>
+      <div class="profil-ligne">
+        <select id="diag-classe">
+          <option value="OPE">Opérations</option>
+          <option value="EnseignantChercheur">Enseignants-chercheurs</option>
+          <option value="PartenairesOPE">Partenaires</option>
+        </select>
+        <button type="button" id="diag-lancer" class="btn btn-petit">Inspecter</button>
+      </div>
+      <div id="diag-resultat"></div>
+    </section>
+
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
