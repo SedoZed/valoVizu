@@ -814,6 +814,39 @@ t('adresse vide : rien à restaurer', depuisAdresse('') === null);
 t('adresse sans sélection', depuisAdresse('t=ec').etat.masquees.size === 0);
 t('source inconnue ramenée aux opérations', depuisAdresse('t=zzz').source === 'ope');
 
+/* Une restriction d'affichage se partage et s'annule comme un filtre : elle
+   change ce qu'on voit, même si elle n'écarte aucun enregistrement. */
+const aRestreindre = etatVide();
+aRestreindre.restrictions = { labos: new Set(['CEMTI', 'LLCP']), contrats: new Set(['A & B']) };
+const reluRestrictions = depuisAdresse(versAdresse('ope', aRestreindre));
+t('restrictions portées par l’adresse',
+  [...reluRestrictions.etat.restrictions.labos].sort().join() === 'CEMTI,LLCP',
+  [...(reluRestrictions.etat.restrictions.labos || [])]);
+t('plusieurs figures restreintes indépendamment',
+  reluRestrictions.etat.restrictions.contrats.has('A & B'),
+  Object.keys(reluRestrictions.etat.restrictions));
+t('aucune restriction : rien dans l’adresse',
+  !versAdresse('ope', etatVide()).includes('r.'));
+
+/* Un profil doit reproduire ce qu'on voyait, non seulement ce qu'on avait
+   filtré : une restriction change l'image sans changer les effectifs. */
+const { enregistrerProfil: enrP, appliquerProfil: appP } =
+    await import('../js/core/reglages.js');
+const etatProfil = etatVide();
+etatProfil.facettes.type = new Set(['Université']);
+etatProfil.restrictions = { 'labos:labo': new Set(['CEMTI', 'LLCP']) };
+const profilRestr = enrP('Essai', 'ope', etatProfil, { renommages: {} });
+t('le profil emporte les restrictions',
+  profilRestr.restrictions?.['labos:labo']?.length === 2,
+  profilRestr.restrictions);
+const repris = appP(profilRestr, [
+    { id: 1, kind: 'ope', titre: 'O', annee: '2022', labos: [], ecs: [],
+      partenaires: [{ nom: 'X', type: 'Université', naf: '' }] },
+], 'ope');
+t('et les restitue',
+  repris.etat.restrictions?.['labos:labo']?.has('CEMTI'),
+  [...(repris.etat.restrictions?.['labos:labo'] || [])]);
+
 /* Historique : le relevé se fait au rendu, sans instrumenter les actions. */
 const histo = new Historique();
 const etatH = etatVide();
@@ -860,6 +893,23 @@ t('masquage décrit comme tel',
            hh.relever('ope', ee); ee.masquees.add('Y'); hh.relever('ope', ee);
            return /masquage/.test(hh.descriptionAnnulation('ope')); })());
 
+/* Une restriction doit être vue par l'historique : posée puis annulée, elle
+   doit disparaître. Sans cela, le seul geste qui change ce qu'on voit sans
+   changer les effectifs échapperait à l'annulation. */
+const hR = new Historique();
+const eR = etatVide();
+hR.relever('ope', eR);
+eR.restrictions = { labos: new Set(['CEMTI']) };
+hR.relever('ope', eR);
+t('une restriction compte comme un changement', hR.peutAnnuler('ope'));
+t('elle est décrite comme telle',
+  /restriction/.test(hR.descriptionAnnulation('ope')), hR.descriptionAnnulation('ope'));
+const revenuR = hR.annuler('ope');
+t('l’annulation la lève',
+  !revenuR.restrictions?.labos?.size, [...(revenuR.restrictions?.labos || [])]);
+t('le rétablissement la repose',
+  hR.retablir('ope').restrictions.labos.has('CEMTI'));
+
 /* Les piles sont propres à chaque tableau de bord. */
 const h4 = new Historique();
 const eo = etatVide(), ec = etatVide();
@@ -869,6 +919,104 @@ t('piles cloisonnées par tableau de bord',
   h4.peutAnnuler('ope') && !h4.peutAnnuler('ec'));
 
 console.log(`  ${ok - avant15} vérifications passées`);
+
+/* ── Renvois vers les fiches Omeka S ─────────────────────────────────── */
+console.log('\nRenvois vers Omeka S');
+const avant16 = ok;
+
+const { ficheAdmin } = await import('../js/core/omeka.js');
+const { identifiantOmeka } = await import('../js/core/champs.js');
+
+memoire.valo_config = JSON.stringify({ api: 'https://exemple.org/omeka/api/' });
+chargerConfig();
+t('adresse de fiche déduite de celle de l’API',
+  ficheAdmin(1234) === 'https://exemple.org/omeka/admin/item/1234',
+  ficheAdmin(1234));
+
+memoire.valo_config = JSON.stringify({ api: 'https://exemple.org/omeka/api' });
+chargerConfig();
+t('barre oblique finale sans incidence',
+  ficheAdmin(7) === 'https://exemple.org/omeka/admin/item/7', ficheAdmin(7));
+
+t('aucune fiche sans identifiant', ficheAdmin(null) === '');
+
+/* `chargerConfig` ignore délibérément une configuration invalide : pour
+   éprouver l'absence d'adresse, il faut la retirer directement. */
+const apiRetenue = CONFIG.api;
+CONFIG.api = '';
+t('aucune fiche sans adresse configurée', ficheAdmin(12) === '');
+CONFIG.api = apiRetenue;
+
+/* Les identifiants des items liés doivent être retrouvables depuis la valeur
+   affichée, faute de quoi aucun renvoi n'est possible. */
+const corpusRenvoi = [{
+    id: 1, kind: 'ope', titre: 'O1', annee: '2022', labos: [], ecs: [],
+    typeContrat: 'Convention de recherche', typeContratId: 900,
+    partenaires: [{ id: 500, nom: 'CNRS', type: 'Organisme public',
+                    naf: 'Recherche', typeId: 610, nafId: 720 }],
+}];
+t('identifiant d’un partenaire',
+  identifiantOmeka(corpusRenvoi, 'ope', 'partenaire', 'CNRS') === 500);
+t('identifiant d’un type de partenaire',
+  identifiantOmeka(corpusRenvoi, 'ope', 'type', 'Organisme public') === 610);
+t('identifiant d’un code d’activité',
+  identifiantOmeka(corpusRenvoi, 'ope', 'naf', 'Recherche') === 720);
+t('identifiant d’un type de contrat',
+  identifiantOmeka(corpusRenvoi, 'ope', 'contrat', 'Convention de recherche') === 900);
+
+/* Un champ calculé n'a pas de fiche : le renvoi ne doit pas être proposé
+   plutôt que de mener à une page inexistante. */
+t('aucun identifiant pour une année',
+  identifiantOmeka(corpusRenvoi, 'ope', 'annee', '2022') === null);
+t('aucun identifiant pour une durée',
+  identifiantOmeka(corpusRenvoi, 'ope', 'duree', 'De 1 à 2 ans') === null);
+t('aucun identifiant côté chercheurs',
+  identifiantOmeka(corpusRenvoi, 'ec', 'labo', 'CEMTI') === null);
+t('valeur absente', identifiantOmeka(corpusRenvoi, 'ope', 'partenaire', 'INRIA') === null);
+
+console.log(`  ${ok - avant16} vérifications passées`);
+
+/* ── Montants ────────────────────────────────────────────────────────── */
+console.log('\nMontants');
+const avant17 = ok;
+
+const { analyserMontant, trancheMontant, formaterMontant } =
+    await import('../js/core/omeka.js');
+
+/* La base ne contient que des nombres, mais sous des formes qui se
+   contredisent : « 1.234 » vaut mille deux cent trente-quatre ici, un et des
+   poussières ailleurs. */
+[['123', 123], ['123,45', 123.45], ['1 234,56', 1234.56], ['1234.56', 1234.56],
+ ['1.234', 1234], ['1,234,567', 1234567], ['5000 €', 5000],
+ ['12 000 € TTC', 12000], ['3500,50 HT', 3500.5], ['0', 0],
+].forEach(([brut, attendu]) => {
+    t(`« ${brut} » lu comme ${attendu}`, analyserMontant(brut) === attendu,
+      analyserMontant(brut));
+});
+
+/* Une valeur illisible doit valoir « inconnu », jamais zéro : un zéro se
+   fondrait dans les sommes et les tirerait vers le bas sans se signaler. */
+['', '   ', 'environ 3000', 'N/C', 'abc', '-50', null, undefined]
+    .forEach(brut => {
+        t(`« ${brut} » compté absent, non nul`, analyserMontant(brut) === null,
+          analyserMontant(brut));
+    });
+
+/* Les tranches sont fixes : elles doivent classer les bornes sans ambiguïté. */
+t('borne basse dans la première tranche', trancheMontant(0, 'X') === 'Moins de 5 k€');
+t('juste sous une borne', trancheMontant(4999, 'X') === 'Moins de 5 k€');
+t('sur la borne, tranche suivante', trancheMontant(5000, 'X') === 'De 5 à 10 k€');
+t('montant élevé', trancheMontant(400000, 'X') === 'Plus de 250 k€');
+t('absence rendue telle quelle', trancheMontant(null, 'Budget non renseigné')
+    === 'Budget non renseigné');
+
+/* Le formatage privilégie l'ordre de grandeur sur les centimes. */
+t('montant en euros', /^850\s?€$/.test(formaterMontant(850)), formaterMontant(850));
+t('montant en milliers', formaterMontant(12000) === '12 k€', formaterMontant(12000));
+t('montant en millions', formaterMontant(1500000) === '1,5 M€', formaterMontant(1500000));
+t('absence formatée', formaterMontant(null) === '—');
+
+console.log(`  ${ok - avant17} vérifications passées`);
 
 console.log(`\n${ok} passées, ${ko} échouées\n`);
 process.exit(ko ? 1 : 0);

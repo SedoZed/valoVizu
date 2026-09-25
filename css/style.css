@@ -4,21 +4,45 @@
    Chiffres en Mono tabulaire : les colonnes s'alignent, les ordres de grandeur
    se comparent à l'œil. */
 
-:root {
-  --papier:    #F3F5F4;
-  --carte:     #FFFFFF;
-  --encre:     #16232B;
-  --encre-2:   #52646E;
-  --encre-3:   #7C8B93;
-  --filet:     #D9DFDD;
-  --filet-doux:#EAEEEC;
-  --signal:    #0B6E5F;
-  --signal-2:  #E1EFE9;
-  --alerte:    #A8471A;
-  --alerte-2:  #FAEDE5;
+/* Identité visuelle de l'université Paris 8, « Université des Créations ».
+   Palette du logotype primaire, telle que définie par la charte :
+     Poppy     #E30F1B  Pantone 485C
+     Raspberry #AE164E  Pantone 215C
+     Purple    #7B206B  Pantone 255C
+     Maroon    #75151F  Pantone 188C
+     Black     #000000  Black 6C
+   Typographie : Poppins.
 
-  --titre: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
-  --corps: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+   Répartition retenue, et pourquoi :
+   — Raspberry porte l'interaction et la sélection. Il appartient au rouge
+     institutionnel, ce qui donne à l'outil son air de famille, tout en étant
+     moins agressif que Poppy sur les grandes surfaces d'un tableau de bord.
+   — Poppy est réservé à l'avertissement : le rouge vif y est attendu, et le
+     garder pour cet usage évite qu'il se banalise.
+   — Maroon habille les bandeaux sombres, où sa profondeur convient mieux
+     qu'un noir neutre.
+   — Purple rejoint la palette des figures, éclairci pour rester visible sur
+     fond sombre.
+   Tous ces tons dépassent le seuil AA sur fond clair, comme la charte le
+   demande explicitement. */
+:root {
+  --papier:    #F7F4F5;
+  --carte:     #FFFFFF;
+  --encre:     #1A1418;
+  --encre-2:   #5B5058;
+  --encre-3:   #877C83;
+  --filet:     #E2D8DC;
+  --filet-doux:#EFE8EB;
+  --signal:    #AE164E;
+  --signal-2:  #FAE7ED;
+  --alerte:    #E30F1B;
+  --alerte-2:  #FDE9EA;
+
+  /* Poppins est la police de l'identité. Elle sert aux titres comme au
+     texte courant ; les chiffres gardent une chasse fixe, sans laquelle les
+     colonnes de tableaux et les axes de figures cessent de s'aligner. */
+  --titre: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --corps: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --mono:  "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --ecart: 20px;
@@ -31,11 +55,11 @@
   --ombre-modale: 0 12px 40px rgba(22,35,43,.25);
   --voile-fond:   rgba(243,245,244,.96);
   --modale-fond:  rgba(22,35,43,.5);
-  --barre-fond:   var(--encre);
+  --barre-fond:   #75151F;
   --barre-texte:  #FFFFFF;
   --barre-doux:   rgba(255,255,255,.62);
   --barre-filet:  rgba(255,255,255,.35);
-  --barre-survol: #23343D;
+  --barre-survol: #8F2029;
 }
 
 /* Thème sombre.
@@ -43,28 +67,34 @@
    et les aplats saturés vibrent. L'encre devient un gris clair légèrement
    chaud, et les couleurs de signal sont éclaircies pour rester lisibles sur
    fond foncé — un vert profond y disparaîtrait. */
+/* Thème sombre.
+   Aucune couleur de la charte ne tient sur fond foncé : Raspberry n'y atteint
+   que 2,3 de contraste, Purple 1,7. Les teintes sont donc éclaircies à
+   luminosité croissante en conservant leur ton, jusqu'à franchir le seuil AA.
+   La charte impose le respect des contrastes ; elle ne fige pas les valeurs
+   pour un fond sombre, qu'elle n'envisage que pour le logotype. */
 [data-theme="sombre"] {
-  --papier:    #14181B;
-  --carte:     #1C2226;
-  --encre:     #DDE3E5;
-  --encre-2:   #A3AFB4;
-  --encre-3:   #7B888D;
-  --filet:     #2E373C;
-  --filet-doux:#242C31;
-  --signal:    #4FB3A0;
-  --signal-2:  #1E3733;
-  --alerte:    #E08A5F;
-  --alerte-2:  #3A2418;
+  --papier:    #1A1417;
+  --carte:     #241C20;
+  --encre:     #EDE3E7;
+  --encre-2:   #B5A6AD;
+  --encre-3:   #8C7F86;
+  --filet:     #3B2F35;
+  --filet-doux:#2E252A;
+  --signal:    #E95089;
+  --signal-2:  #3A1B28;
+  --alerte:    #F34B55;
+  --alerte-2:  #3D1B1D;
 
   --ombre-carte:  0 1px 2px rgba(0,0,0,.4);
   --ombre-modale: 0 12px 40px rgba(0,0,0,.6);
   --voile-fond:   rgba(20,24,27,.96);
   --modale-fond:  rgba(0,0,0,.62);
-  --barre-fond:   #0E1214;
+  --barre-fond:   #4A0D14;
   --barre-texte:  #DDE3E5;
   --barre-doux:   rgba(221,227,229,.55);
   --barre-filet:  rgba(221,227,229,.28);
-  --barre-survol: #2A3338;
+  --barre-survol: #6B1620;
 }
 
 /* Le navigateur doit connaître le thème : il en dépend pour colorer les
@@ -91,7 +121,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-h1, h2, h3 { font-family: var(--titre); margin: 0; letter-spacing: .01em; }
+h1, h2, h3 { font-family: var(--titre); margin: 0; letter-spacing: 0; }
 
 main { max-width: 1440px; margin: 0 auto; padding: 0 24px 72px; }
 
@@ -108,7 +138,7 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 24px 72px; }
   font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
   text-transform: uppercase; color: var(--signal); margin: 0 0 4px;
 }
-.bandeau h1 { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.bandeau h1 { font-size: 25px; font-weight: 600; line-height: 1.15; letter-spacing: -.01em; }
 .bandeau-actions { margin-left: auto; display: flex; gap: 8px; }
 
 .onglets { display: flex; gap: 4px; background: var(--papier); padding: 4px; border-radius: var(--rayon); }
@@ -694,7 +724,7 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
 .variante {
   background: none; border: 0; padding: 1px 4px; border-radius: 2px;
   font-family: var(--corps); font-size: 13px; color: var(--encre);
-  cursor: pointer; text-decoration: underline dotted;
+  cursor: pointer; border-bottom: 1px dotted var(--encre-3);
 }
 .variante:hover { background: var(--signal-2); color: var(--signal); }
 
@@ -797,6 +827,28 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
 .reglage-mode { margin-left: auto; }
 .reglage-mode select { max-width: 260px; }
 
+/* Panneau des montants : trois sélecteurs dans la même tête — la grandeur
+   mesurée, la lecture, la maille. C'est le premier qui est repoussé à droite,
+   les suivants le serrant de près : les séparer les ferait lire comme des
+   réglages sans rapport. La tête peut passer à la ligne plutôt que de les
+   comprimer, un menu illisible étant pire qu'un titre sur deux lignes. */
+.panneau-tete { flex-wrap: wrap; row-gap: 4px; }
+.reglage-mesure { margin-left: auto; }
+.reglage-mesure select { max-width: 190px; }
+.reglage-categorie select { max-width: 190px; }
+.reglage-mesure ~ .reglage-mode,
+.reglage-mesure ~ .reglage-categorie { margin-left: 4px; }
+
+/* Points d'opération de la bande de dispersion : leur intérêt est d'être
+   désignables un par un, ce que seul le survol montre. */
+.point-operation { transition: r .1s, fill-opacity .1s; }
+.figure-montants rect[role="button"]:hover + .point-operation {
+  fill-opacity: 1; stroke: var(--carte); stroke-width: 1.2;
+}
+.figure-montants rect[role="button"]:focus-visible {
+  outline: 2px solid var(--signal); outline-offset: 1px;
+}
+
 /* ---------- Bouton de sens ---------- */
 
 .bouton-sens {
@@ -855,3 +907,81 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
 .etiquette-axe:hover .figure-axe { fill: var(--signal); }
 .etiquette-axe:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
 .etiquette-axe:focus { outline: none; }
+
+
+/* ---------- Rappel d'identité ---------- */
+
+/* L'esperluette est le symbole récurrent de la charte, employé en filigrane
+   sur les supports. Reprise ici en marque discrète du bandeau, à une opacité
+   qui n'entre jamais en concurrence avec le contenu. */
+.bandeau { position: relative; overflow: hidden; }
+.bandeau::after {
+  content: '&';
+  position: absolute; right: 26px; top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--titre); font-weight: 700; font-size: 96px;
+  line-height: 1; color: var(--signal); opacity: .05;
+  pointer-events: none; user-select: none;
+}
+@media (max-width: 1100px) { .bandeau::after { display: none; } }
+
+/* ---------- Boîte à outils ---------- */
+
+.outils-zone { position: relative; flex: none; }
+.outils-bouton {
+  width: 34px; height: 34px; padding: 0;
+  background: none; border: 1px solid var(--filet);
+  border-radius: var(--rayon); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.outils-bouton:hover { border-color: var(--signal); }
+.outils-bouton:focus-visible { outline: 2px solid var(--signal); outline-offset: 1px; }
+.outils-barres,
+.outils-barres::before,
+.outils-barres::after {
+  display: block; width: 16px; height: 2px;
+  background: var(--encre-2); border-radius: 1px;
+}
+.outils-barres { position: relative; }
+.outils-barres::before, .outils-barres::after { content: ''; position: absolute; left: 0; }
+.outils-barres::before { top: -5px; }
+.outils-barres::after  { top: 5px; }
+.outils-bouton:hover .outils-barres,
+.outils-bouton:hover .outils-barres::before,
+.outils-bouton:hover .outils-barres::after { background: var(--signal); }
+
+.outils-panneau {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 200;
+  min-width: 230px; padding: 4px 0;
+  background: var(--carte); border: 1px solid var(--filet);
+  border-radius: var(--rayon); box-shadow: var(--ombre-modale);
+}
+.outils-lien {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 8px 14px; border: 0; background: none;
+  font-family: var(--corps); font-size: 13.5px; color: var(--encre);
+  text-align: left; text-decoration: none; cursor: pointer;
+}
+.outils-lien:hover, .outils-lien:focus {
+  background: var(--signal-2); color: var(--signal); outline: none;
+}
+.outils-note {
+  font-family: var(--mono); font-size: 10.5px; color: var(--encre-3); flex: none;
+}
+.outils-regler { color: var(--encre-2); }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* Lien vers une fiche, à l'intérieur d'une ligne cliquable. */
+.lien-fiche { color: inherit; text-decoration: none; border-bottom: 1px solid var(--filet); }
+.lien-fiche:hover { color: var(--signal); border-bottom-color: var(--signal); }
+
+/* Une figure qui ne montre qu'une partie de ses valeurs doit le dire. */
+.note-restriction {
+  background: var(--signal-2); border-left: 3px solid var(--signal);
+  padding: 6px 10px; border-radius: 0 var(--rayon) var(--rayon) 0;
+  margin-bottom: 8px;
+}

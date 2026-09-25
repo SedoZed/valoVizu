@@ -6,7 +6,9 @@
 <title>Valorisation — Paris 8</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Poppins est la police de l'identité graphique de Paris 8 ; la chasse fixe
+     reste réservée aux chiffres, pour que colonnes et axes s'alignent. -->
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -15,12 +17,19 @@
 
 <header class="bandeau">
   <div class="bandeau-inner">
+    <div class="outils-zone">
+      <button type="button" id="outils-ouvrir" class="outils-bouton"
+              aria-expanded="false" aria-haspopup="menu" title="Autres outils">
+        <span class="outils-barres" aria-hidden="true"></span>
+        <span class="sr-only">Autres outils</span>
+      </button>
+    </div>
     <div>
-      <p class="surtitre">Université Paris 8 · Omeka S</p>
+      <p class="surtitre">Université&nbsp;Paris&nbsp;8 · Université des Créations</p>
       <h1>Valorisation de la recherche</h1>
     </div>
     <nav class="onglets" aria-label="Tableau de bord">
-      <button type="button" id="onglet-ope" class="onglet actif">Opérations de partenariat</button>
+      <button type="button" id="onglet-ope" class="onglet actif">Partenariats</button>
       <button type="button" id="onglet-ec"  class="onglet">Enseignants-chercheurs</button>
     </nav>
     <div class="bandeau-actions">
@@ -54,6 +63,7 @@
         <button type="button" id="retablir" class="btn btn-petit" hidden>↷ Rétablir</button>
       </div>
       <button type="button" id="reinit" class="lien" hidden></button>
+      <button type="button" id="tout-reafficher" class="lien" hidden></button>
 
       <div id="facettes"></div>
 
@@ -159,6 +169,7 @@
     <nav class="onglets onglets-modale" aria-label="Sections de la configuration">
       <button type="button" class="onglet actif" data-volet="volet-connexion">Connexion</button>
       <button type="button" class="onglet" data-volet="volet-parametres">Paramètres</button>
+      <button type="button" class="onglet" data-volet="volet-outils">Outils</button>
       <button type="button" class="onglet" data-volet="volet-diagnostic">Diagnostic</button>
     </nav>
 
@@ -220,6 +231,20 @@
 
       <div class="modale-actions">
         <button type="button" id="pref-defaut" class="btn btn-petit">Valeurs par défaut</button>
+      </div>
+    </section>
+
+    <section id="volet-outils" class="volet" hidden>
+      <p class="note">Liens proposés par le menu en haut à gauche. L’instance
+        Omeka&nbsp;S y figure d’office, déduite de l’adresse de l’API.</p>
+      <div id="outils-liste"></div>
+      <label class="etiquette-champ" for="outil-nom">Nom</label>
+      <input type="text" id="outil-nom" placeholder="Annuaire des laboratoires">
+      <label class="etiquette-champ" for="outil-url">Adresse</label>
+      <input type="url" id="outil-url" placeholder="https://exemple.org/annuaire">
+      <p id="outil-erreur" class="note note-alerte"></p>
+      <div class="modale-actions">
+        <button type="button" id="outil-ajouter" class="btn">Ajouter ce lien</button>
       </div>
     </section>
 

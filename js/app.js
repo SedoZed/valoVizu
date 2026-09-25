@@ -8,7 +8,7 @@
  */
 import { CONFIG, chargerConfig, enregistrerConfig, reinitialiserConfig,
          adresseValide, viderCache, chargerEc, chargerOpe,
-         dateExtraction, diagnostiquer, ageCache } from './core/omeka.js';
+         dateExtraction, diagnostiquer, ageCache, ficheAdmin } from './core/omeka.js';
 import { TITRES, UNITE, FACETTES, champ, masquagesParDefaut } from './core/champs.js';
 import { etatVide, retenus, valeursDistinctes, nombreFiltres } from './core/selection.js';
 import { reglagesVides, listerProfils, enregistrerProfil,
@@ -29,6 +29,9 @@ import { exporterSvg, exporterPng, nomFichier } from './ui/exportFigure.js';
 import { rendreLegende, brancherCopie, texteLegende, texteSource } from './ui/legende.js';
 import { depuisAdresse, ecrireAdresse, lienCourant } from './core/adresse.js';
 import { Historique } from './core/historique.js';
+import { brancherOutils, liensOutils, ajouterOutil, retirerOutil,
+         adresseOutilValide } from './ui/outils.js';
+import { identifiantOmeka } from './core/champs.js';
 import { attacherMenu } from './ui/menu.js';
 import { ouvrirListe } from './ui/liste.js';
 
@@ -78,8 +81,19 @@ const app = {
             onMenu:   (element, cle, valeur, extras) =>
                           this.attacherMenuValeur(element, cle, valeur, extras),
             onMenuAutres: (element, cle, membres) => this.attacherMenuAutres(element, cle, membres),
+            onMenuEnregistrement: (element, rec, auClic = false) =>
+                this.attacherMenuEnregistrement(element, rec, auClic),
             onMenuCombinaison: (element, cleA, vA, cleB, vB, n) =>
                 this.attacherMenuCombinaison(element, cleA, vA, cleB, vB, n),
+            /* Une cellule de matrice désigne une intersection, non une valeur :
+               « ajouter au filtre » n'y aurait pas de sens — ajouter la ligne
+               ou la colonne ? Le seul geste sensé est de retenir les deux. */
+            onIsolerCroisement: (cleA, valeurA, cleB, valeurB) => {
+                const etat = this.etat();
+                etat.facettes[cleA] = new Set([valeurA]);
+                etat.facettes[cleB] = new Set([valeurB]);
+                this.rendre();
+            },
             onOuvrirAutres: (cle, membres) => this.ouvrirRegroupement(cle, membres),
             onExport: (tete, corps, titre) => this.ajouterExport(tete, corps, titre),
             onRafraichir: () => this.rendre(),
@@ -209,14 +223,14 @@ const app = {
     /** Menu propre à un regroupement : il n'a pas de valeur à filtrer. */
     attacherMenuAutres(element, cle, membres) {
         const def = champ(this.source, cle);
-        attacherMenu(element, `Regroupement — ${def?.libelle || cle}`, () => [
-            {
+        attacherMenu(element, `Regroupement — ${def?.libelle || cle}`, () => this._assembler([
+            [{
                 libelle: `Voir le contenu (${membres.length} valeurs)`,
                 action: () => this.ouvrirRegroupement(cle, membres),
-            },
-            {
+            }],
+            [{
                 libelle: 'Afficher toutes ces valeurs',
-                aide: 'dans la figure',
+                aide: 'sur les figures',
                 action: () => {
                     const etat = this.etat();
                     const epingle = new Set(etat.epinglees[cle] || []);
@@ -224,8 +238,8 @@ const app = {
                     etat.epinglees[cle] = epingle;
                     this.rendre();
                 },
-            },
-        ]);
+            }],
+        ]));
     },
 
     /**
@@ -245,9 +259,11 @@ const app = {
         const titre = `${valeurA} · ${valeurB}`;
         attacherMenu(element, titre, () => {
             const etat = this.etat();
-            return [
+            return this._assembler([
+                /* Agir sur la sélection, avec le verbe employé partout. */
+                [
                 {
-                    libelle: 'N’afficher que cette combinaison',
+                    libelle: 'Ne garder que ce croisement',
                     aide: `${effectif}`,
                     action: () => {
                         etat.facettes[cleA] = new Set([valeurA]);
@@ -256,21 +272,21 @@ const app = {
                     },
                 },
                 {
-                    separateurAvant: true,
-                    libelle: `N’afficher que ${(defA?.libelle || cleA).toLowerCase()} : ${valeurA}`,
+                    libelle: `Ne garder que ${(defA?.libelle || cleA).toLowerCase()} : ${valeurA}`,
                     action: () => { etat.facettes[cleA] = new Set([valeurA]); this.rendre(); },
                 },
                 {
-                    libelle: `N’afficher que ${(defB?.libelle || cleB).toLowerCase()} : ${valeurB}`,
+                    libelle: `Ne garder que ${(defB?.libelle || cleB).toLowerCase()} : ${valeurB}`,
                     action: () => { etat.facettes[cleB] = new Set([valeurB]); this.rendre(); },
                 },
                 {
-                    separateurAvant: true,
                     libelle: 'Ajouter au filtre',
                     aide: (defB?.libelle || cleB).toLowerCase(),
                     action: () => this.basculerFiltre(cleB, valeurB),
                 },
-                {
+                ],
+
+                [{
                     libelle: 'Copier la valeur',
                     action: async () => {
                         try {
@@ -278,9 +294,75 @@ const app = {
                             this._message('Valeur copiée.');
                         } catch { this._message('Copie impossible dans ce navigateur.'); }
                     },
-                },
-            ];
+                }],
+            ]);
         });
+    },
+
+    /**
+     * Menu d'une ligne du tableau, c'est-à-dire d'un enregistrement.
+     *
+     * Le menu n'était posé que sur les cellules dont la colonne correspond à
+     * un champ à valeur unique : ailleurs dans la ligne, le clic droit ne
+     * donnait rien, et la fiche de l'opération elle-même restait
+     * inatteignable. Le menu de cellule l'emporte toujours, sa propagation
+     * étant arrêtée — les deux ne se gênent donc pas.
+     */
+    attacherMenuEnregistrement(element, rec, auClic = false) {
+        const fiche = ficheAdmin(rec.id);
+        attacherMenu(element, rec.titre || `Enregistrement ${rec.id}`, () => this._assembler([
+            [fiche && {
+                libelle: 'Ouvrir la fiche dans Omeka S',
+                aide: 'nouvel onglet',
+                action: () => window.open(fiche, '_blank', 'noopener'),
+            }],
+            [
+            {
+                libelle: 'Copier le titre',
+                action: async () => {
+                    try {
+                        await navigator.clipboard.writeText(rec.titre || '');
+                        this._message('Titre copié.');
+                    } catch { this._message('Copie impossible dans ce navigateur.'); }
+                },
+            },
+            fiche && {
+                libelle: 'Copier le lien de la fiche',
+                action: async () => {
+                    try {
+                        await navigator.clipboard.writeText(fiche);
+                        this._message('Lien copié.');
+                    } catch { this._message('Copie impossible dans ce navigateur.'); }
+                },
+            },
+            ],
+        ]), { auClic });
+    },
+
+    /**
+     * Assemble des familles d'actions en un menu.
+     *
+     * Les séparateurs étaient posés à la main sur chaque entrée, si bien
+     * qu'ils finissaient par isoler des entrées seules plutôt que par marquer
+     * des familles — trois traits pour les trois dernières lignes. Ici une
+     * famille vide disparaît sans laisser de trait, et il ne peut y avoir ni
+     * séparateur en tête ni deux de suite.
+     *
+     * Les familles suivent la nature de l'action, et chacune a son verbe :
+     * « garder » agit sur la sélection, « afficher » sur le dessin d'une
+     * figure, « masquer » sur le périmètre. Employer le même mot pour deux
+     * natures différentes — « n'afficher que » pour un filtre et pour une
+     * restriction — était la confusion la plus coûteuse.
+     */
+    _assembler(familles) {
+        const entrees = [];
+        familles.forEach(famille => {
+            const valides = (famille || []).filter(Boolean);
+            if (!valides.length) return;
+            const ouvre = entrees.length > 0;
+            valides.forEach((e, i) => entrees.push({ ...e, separateurAvant: ouvre && i === 0 }));
+        });
+        return entrees;
     },
 
     attacherMenuValeur(element, cle, valeur, extras = null) {
@@ -291,33 +373,41 @@ const app = {
             const dejaChoisie = choix.has(valeur);
             const masquee = etat.masquees.has(valeur);
             const epinglee = etat.epinglees[cle]?.has(valeur);
-            return [
+            const seule = dejaChoisie && choix.size === 1;
+
+            return this._assembler([
+                /* Agir sur la sélection : ces gestes changent les effectifs
+                   partout dans l'outil. */
+                [
                 {
                     libelle: dejaChoisie ? 'Retirer du filtre' : 'Ajouter au filtre',
                     aide: dejaChoisie ? null : 'clic',
                     action: () => this.basculerFiltre(cle, valeur),
                 },
-                ...(extras ? extras() : []),
-                {
-                    libelle: 'N’afficher que cette valeur',
+                !seule && {
+                    libelle: 'Ne garder que cette valeur',
                     action: () => {
                         etat.facettes[cle] = new Set([valeur]);
                         this.rendre();
                     },
                 },
-                epinglee && {
-                    libelle: 'Remettre dans le regroupement',
-                    action: () => this.basculerEpingle(cle, valeur),
-                },
-                (choix.size > 1 || (choix.size === 1 && !dejaChoisie)) && {
-                    libelle: 'Retirer les autres valeurs de ce filtre',
+                /* Vider le filtre n'était offert que sous l'intitulé « retirer
+                   les autres valeurs », qui faisait deux choses selon que la
+                   valeur pointée y figurait ou non — et redisait alors « ne
+                   garder que celle-ci ». */
+                choix.size > 0 && {
+                    libelle: `Vider ce filtre (${choix.size} valeur${choix.size > 1 ? 's' : ''})`,
                     action: () => {
-                        etat.facettes[cle] = new Set(dejaChoisie ? [valeur] : []);
+                        etat.facettes[cle] = new Set();
                         this.rendre();
                     },
                 },
+                /* Masquer rejoint cette famille : comme les filtres, le geste
+                   change les effectifs partout. L'isoler derrière son propre
+                   trait produisait une ligne seule, et trois traits pour les
+                   trois dernières entrées — l'empilement qu'on corrige. Sa
+                   teinte d'avertissement suffit à le distinguer. */
                 {
-                    separateurAvant: true,
                     libelle: masquee ? 'Remettre dans le périmètre' : 'Masquer cette valeur',
                     aide: masquee ? null : 'partout dans l’outil',
                     danger: !masquee,
@@ -332,15 +422,34 @@ const app = {
                         this.rendre();
                     },
                 },
+                ],
+
+                /* Agir sur le dessin d'une figure : aucun effectif ne change. */
+                [
+                ...(extras ? extras() : []),
+                epinglee && {
+                    libelle: 'Remettre dans le regroupement',
+                    aide: 'sur les figures',
+                    action: () => this.basculerEpingle(cle, valeur),
+                },
+                ],
+
+                /* Sortir de l'outil : consulter ailleurs, emporter. */
+                [
+                this._ficheDe(cle, valeur) && {
+                    libelle: 'Ouvrir la fiche dans Omeka S',
+                    aide: 'nouvel onglet',
+                    action: () => window.open(this._ficheDe(cle, valeur), '_blank', 'noopener'),
+                },
                 {
-                    separateurAvant: true,
                     libelle: 'Copier la valeur',
                     action: async () => {
                         try { await navigator.clipboard.writeText(valeur); this._message('Valeur copiée.'); }
                         catch { this._message('Copie impossible dans ce navigateur.'); }
                     },
                 },
-            ];
+                ],
+            ]);
         });
     },
 
@@ -364,6 +473,7 @@ const app = {
 
         this.facettes.rendre();
         rendreReinitialisation($('reinit'), this.etat(), () => this.rendre());
+        this._rendreRestrictions();
         rendreIndicateurs($('indicateurs'), rows, this.source, this.etat());
         this.figures.rendre(rows);
         /* Les croisements valent pour les deux tableaux de bord : laboratoire
@@ -414,6 +524,29 @@ const app = {
         this.historique.relever(this.source, this.etat());
         this._rendreHistorique();
         ecrireAdresse(this.source, this.etat());
+    },
+
+    /**
+     * Lever d'un coup toutes les restrictions d'affichage.
+     *
+     * Le bouton « Réinitialiser les filtres » ne les touche pas, et c'est
+     * juste : une restriction n'écarte aucun enregistrement, elle ne figure
+     * donc pas parmi les filtres. Mais rien ne permettait alors de les lever
+     * ensemble, et quatre figures restreintes demandaient quatre gestes.
+     */
+    _rendreRestrictions() {
+        const bouton = $('tout-reafficher');
+        if (!bouton) return;
+        const etat = this.etat();
+        const n = Object.values(etat.restrictions || {})
+            .filter(v => v?.size).length;
+        bouton.hidden = n === 0;
+        bouton.textContent = `Tout réafficher (${n} figure${n > 1 ? 's' : ''})`;
+        bouton.title = 'Lever les restrictions d’affichage de toutes les figures';
+        bouton.onclick = () => {
+            etat.restrictions = {};
+            this.rendre();
+        };
     },
 
     /* ── Annulation ── */
@@ -682,6 +815,29 @@ const app = {
             this._message('Paramètres d’affichage rétablis.');
         });
 
+        brancherOutils($('outils-ouvrir'), () => {
+            $('config-ouvrir').click();
+            document.querySelector('.onglets-modale .onglet[data-volet="volet-outils"]')?.click();
+        });
+
+        $('outil-ajouter')?.addEventListener('click', () => {
+            const nom = $('outil-nom').value.trim();
+            const url = $('outil-url').value.trim();
+            if (!nom) { $('outil-erreur').textContent = 'Donnez un nom à ce lien.'; return; }
+            if (!adresseOutilValide(url)) {
+                $('outil-erreur').textContent = 'L’adresse doit être complète, '
+                    + 'commençant par http:// ou https://';
+                return;
+            }
+            $('outil-erreur').textContent = '';
+            ajouterOutil(nom, url);
+            $('outil-nom').value = '';
+            $('outil-url').value = '';
+            this._rendreOutils();
+        });
+
+        this._rendreOutils();
+
         $('accueil-configurer')?.addEventListener('click', () => {
             $('config-ouvrir').click();
         });
@@ -813,7 +969,21 @@ const app = {
 
         const contexte = () => ({
             titre,
-            legende: texteLegende(this._rows || [], this.source, this.etat(), this.regl()),
+            /* La restriction propre à cette figure rejoint la légende de son
+               export : sans elle, l'image sortirait en paraissant décrire
+               toute la sélection alors qu'elle en dessine une fraction. Le
+               bouton « Tout réafficher » est retranché, il n'a pas de sens
+               hors de l'écran. */
+            legende: [
+                texteLegende(this._rows || [], this.source, this.etat(), this.regl()),
+                (() => {
+                    const note = corps.querySelector('.note-restriction');
+                    if (!note) return '';
+                    const copie = note.cloneNode(true);
+                    copie.querySelector('button')?.remove();
+                    return copie.textContent.trim();
+                })(),
+            ].filter(Boolean).join(' — '),
             source: texteSource(CONFIG.api, dateExtraction(this.source)),
             fondClair: document.documentElement.getAttribute('data-theme') !== 'sombre',
         });
@@ -845,6 +1015,63 @@ const app = {
                 'Image matricielle en double résolution, avec la légende incrustée'),
         );
         tete.appendChild(boite);
+    },
+
+    /** Liste des liens réglés, dans l'écran de configuration. */
+    _rendreOutils() {
+        const hote = $('outils-liste');
+        if (!hote) return;
+        hote.innerHTML = '';
+        const liens = liensOutils();
+        if (!liens.length) {
+            hote.innerHTML = '<p class="note">Aucun lien enregistré.</p>';
+            return;
+        }
+        const liste = document.createElement('ul');
+        liste.className = 'liste-valeurs';
+        let rang = 0;
+        liens.forEach(lien => {
+            const li = document.createElement('li');
+            li.className = 'liste-ligne';
+            const nom = document.createElement('span');
+            nom.className = 'liste-nom';
+            nom.textContent = lien.nom;
+            nom.title = lien.url;
+            li.appendChild(nom);
+            if (lien.deduit) {
+                /* L'instance est déduite de l'adresse de l'API : la retirer
+                   ici n'aurait pas de sens, elle suit la configuration. */
+                const note = document.createElement('span');
+                note.className = 'liste-nombre';
+                note.textContent = 'déduit';
+                li.appendChild(note);
+            } else {
+                const indice = rang++;
+                const retirer = document.createElement('button');
+                retirer.type = 'button';
+                retirer.className = 'liste-action liste-danger';
+                retirer.textContent = 'Retirer';
+                retirer.addEventListener('click', () => {
+                    retirerOutil(indice);
+                    this._rendreOutils();
+                });
+                li.appendChild(retirer);
+            }
+            liste.appendChild(li);
+        });
+        hote.appendChild(liste);
+    },
+
+    /**
+     * Fiche Omeka S d'une valeur, lorsqu'elle provient d'un item lié.
+     *
+     * Les champs dérivés — année, tranche de durée, laboratoire déduit — sont
+     * calculés et n'ont pas de fiche. Le renvoi n'est alors pas proposé,
+     * plutôt que de mener à une page inexistante.
+     */
+    _ficheDe(cle, valeur) {
+        const id = identifiantOmeka(this.records(), this.source, cle, valeur);
+        return id ? ficheAdmin(id) : '';
     },
 
     _dateDuJour() { return new Date().toISOString().slice(0, 10); },

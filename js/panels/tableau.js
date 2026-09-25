@@ -7,6 +7,7 @@
  * donnée telle quelle, sans agrégation, avec un export CSV de la sélection.
  */
 import { UNITE } from '../core/champs.js';
+import { ficheAdmin } from '../core/omeka.js';
 import { valeursVisibles } from '../core/selection.js';
 import { libelleDe } from '../core/reglages.js';
 import { preferences, afficherDuree, detaillerDuree } from '../core/preferences.js';
@@ -21,7 +22,9 @@ const COLONNES = {
     ],
     ope: [
         { cle: 'titre',       titre: 'Opération',    largeur: '20%' },
-        { cle: 'typeContrat', titre: 'Type de contrat', largeur: '14%', champ: 'contrat' },
+        { cle: 'typeContrat', titre: 'Type de contrat', largeur: '12%', champ: 'contrat' },
+        { cle: 'budgetTexte', titre: 'Budget',  largeur: '8%', nombre: true },
+        { cle: 'montantTexte', titre: 'Montant global', largeur: '9%', nombre: true },
         { cle: 'annee',       titre: 'Année',        largeur: '7%',  champ: 'annee' },
         { cle: 'duree',       titre: 'Durée',        largeur: '12%', champ: 'duree' },
         { cle: 'partenaires', titre: 'Partenaires',  largeur: '27%', champ: 'partenaire' },
@@ -139,6 +142,9 @@ export class Tableau {
                 }
             });
             tr.addEventListener('click', () => this._basculerDetail(rec, tr, tbody));
+            /* Menu de la ligne entière : les cellules qui portent le leur
+               l'emportent, leur propagation étant arrêtée. */
+            this.o.onMenuEnregistrement?.(tr, rec);
         });
 
         this.hote.appendChild(table);
@@ -187,9 +193,13 @@ export class Tableau {
             p.append(fort, document.createTextNode(texte));
             cell.appendChild(p);
         });
-        if (rec.url) {
+        /* L'`@id` de l'API désigne la ressource JSON, non une page lisible :
+           le lien menait jusqu'ici à du texte brut. La fiche
+           d'administration se déduit de l'identifiant. */
+        const fiche = ficheAdmin(rec.id);
+        if (fiche) {
             const a = document.createElement('a');
-            a.href = rec.url; a.target = '_blank'; a.rel = 'noopener';
+            a.href = fiche; a.target = '_blank'; a.rel = 'noopener';
             a.className = 'lien';
             a.textContent = 'Ouvrir la fiche dans Omeka S';
             cell.appendChild(a);

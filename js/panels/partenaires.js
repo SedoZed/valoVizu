@@ -13,6 +13,7 @@
  * ce qui est le comportement attendu d'un tableau de bord filtrable.
  */
 import { valeursVisibles } from '../core/selection.js';
+import { ficheAdmin } from '../core/omeka.js';
 
 const PAS = 25;
 
@@ -38,7 +39,10 @@ export class Partenaires {
                 let fiche = parNom.get(p.nom);
                 if (!fiche) {
                     fiche = {
-                        nom: p.nom, type: p.type || '', naf: p.naf || '',
+                        /* L'identifiant est repris ici : sans lui, la fiche
+                           du partenaire reste inatteignable depuis ce
+                           panneau, alors qu'elle est chargée. */
+                        id: p.id, nom: p.nom, type: p.type || '', naf: p.naf || '',
                         operations: 0, labos: new Set(), annees: new Set(), url: p.url || '',
                     };
                     parNom.set(p.nom, fiche);
@@ -162,6 +166,24 @@ export class Partenaires {
                 td.textContent = v === '' ? '—' : v;
                 if (c.nombre) td.className = 'colonne-nombre';
                 if (c.cle === 'nbLabos' && f.labosTexte) td.title = f.labosTexte;
+
+                /* Renvoi vers la fiche du partenaire. Son identifiant était
+                   chargé mais n'avait jamais servi : la fiche restait
+                   inatteignable depuis ce panneau. Le lien est porté par le
+                   nom, et son clic ne doit pas déclencher le filtrage de la
+                   ligne qui l'entoure. */
+                if (c.cle === 'nom' && ficheAdmin(f.id)) {
+                    td.textContent = '';
+                    const a = document.createElement('a');
+                    a.className = 'lien-fiche';
+                    a.href = ficheAdmin(f.id);
+                    a.target = '_blank';
+                    a.rel = 'noopener';
+                    a.textContent = f.nom;
+                    a.title = 'Ouvrir la fiche dans Omeka S';
+                    a.addEventListener('click', e => e.stopPropagation());
+                    td.appendChild(a);
+                }
             });
 
             tr.title = choisi

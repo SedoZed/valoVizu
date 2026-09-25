@@ -162,6 +162,10 @@ export function dessinerFlux(options) {
         titreG = '', titreD = '', unite = 'opérations',
         onClic = null, onMenu = null, surbrillance = null,
         onSurvol = null, couleurs = true, couleurPour = null,
+        /* Un axe temporel n'affiche pas ses effectifs : deux nombres
+           superposés — un millésime puis un effectif — se confondent à la
+           lecture. */
+        chiffresGauche = true, chiffresDroite = true,
     } = options;
     const teinteDe = v => (couleurPour ? couleurPour(v) : couleurDe(v)) || couleurDe(v);
 
@@ -280,7 +284,10 @@ export function dessinerFlux(options) {
                 }));
                 /* L'effectif est inscrit dans le nœud quand il y tient, à côté
                    sinon : il ne doit jamais manquer. */
-                if ((n.y1 - n.y0) >= 14) {
+                const chiffres = nomCote === 'gauche' ? chiffresGauche : chiffresDroite;
+                if (!chiffres) {
+                    /* rien : l'effectif reste accessible au survol */
+                } else if ((n.y1 - n.y0) >= 14) {
                     groupe.appendChild(texte(n.effectif, {
                         x: x + largeurNoeud / 2, y,
                         'text-anchor': 'middle', class: 'figure-valeur',

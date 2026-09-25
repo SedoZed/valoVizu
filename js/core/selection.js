@@ -40,6 +40,16 @@ export function etatVide() {
            filtre écarterait toutes les opérations qui ne la concernent pas —
            et la figure n'afficherait plus qu'elle. */
         epinglees: {},         // { cleChamp: Set(valeurs détachées d'« Autres ») }
+        /* Restrictions d'affichage, par figure.
+           Une restriction ne filtre rien : elle dit à une figure de ne
+           dessiner que certaines de ses valeurs. Aucun effectif ne change,
+           aucun enregistrement n'est écarté — la même barre est montrée
+           seule. C'est ce qui permet de la poser sans que la légende, les
+           totaux ou les figures voisines cessent d'être exacts.
+           Elle vit dans l'état, et non dans le panneau, parce qu'elle change
+           ce qu'on voit : elle doit donc s'annuler et se partager comme un
+           filtre. */
+        restrictions: {},      // { idFigure: Set(valeurs affichées) }
         recherche: '',
     };
 }

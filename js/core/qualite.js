@@ -266,6 +266,62 @@ function controlerOpe(records, total) {
         });
     }
 
+    /* Montants illisibles.
+       Une valeur présente mais non interprétable est plus grave qu'une
+       absence : elle donne l'impression que le montant est connu, alors
+       qu'aucune somme ne le compte. */
+    const montantsIllisibles = records.filter(r => r.budgetBrut || r.montantBrut);
+    if (montantsIllisibles.length) {
+        constats.push({
+            cle: 'montant-illisible',
+            titre: 'Montants non interprétables',
+            effectif: montantsIllisibles.length,
+            part: montantsIllisibles.length / total,
+            gravite: 'attention',
+            explication: 'Ces opérations portent un montant que l’outil n’a pas su '
+                + 'lire — unité, texte libre ou séparateur inattendu. Elles sont '
+                + 'comptées comme non renseignées et n’entrent dans aucune somme.',
+            exemples: montantsIllisibles.slice(0, 6)
+                .map(r => `${r.titre} : « ${r.budgetBrut || r.montantBrut} »`),
+        });
+    }
+
+    /* Budget supérieur au montant global.
+       Le budget de l'opération est une part du montant total : le dépasser
+       trahit une inversion des deux champs ou une erreur de saisie. */
+    const budgetsIncoherents = records.filter(r =>
+        typeof r.budget === 'number' && typeof r.montant === 'number'
+        && r.budget > r.montant);
+    if (budgetsIncoherents.length) {
+        constats.push({
+            cle: 'budget-superieur',
+            titre: 'Budget supérieur au montant global',
+            effectif: budgetsIncoherents.length,
+            part: budgetsIncoherents.length / total,
+            gravite: 'attention',
+            explication: 'Le budget de l’opération est une part du montant total : '
+                + 'le dépasser trahit une inversion des deux champs ou une erreur '
+                + 'de saisie.',
+            exemples: budgetsIncoherents.slice(0, 6).map(r => r.titre),
+        });
+    }
+
+    /* Budget manquant */
+    const sansBudget = records.filter(r => r.budget === null && !r.budgetBrut);
+    if (sansBudget.length) {
+        constats.push({
+            cle: 'budget-absent',
+            titre: 'Budget non renseigné',
+            effectif: sansBudget.length,
+            part: sansBudget.length / total,
+            gravite: sansBudget.length > total * 0.5 ? 'attention' : 'information',
+            explication: 'Ces opérations n’entrent dans aucun cumul financier. '
+                + 'Les sommes affichées ne portent que sur les opérations '
+                + 'dont le budget est connu.',
+            exemples: sansBudget.slice(0, 6).map(r => r.titre),
+        });
+    }
+
     /* Type de contrat manquant */
     const sansContrat = records.filter(r => !r.typeContrat);
     if (sansContrat.length) {

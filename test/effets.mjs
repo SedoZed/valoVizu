@@ -996,6 +996,312 @@ t('réseau : rayon du pôle « Autres » borné',
 t('réseau : tout reste dans le cadre',
   cstDeb.poles.every(p => p.x - p.rayon >= -1 && p.x + p.rayon <= 801));
 
+/* ── Montants : figures financières ────────────────────────────────────
+   Le même contrôle que pour les autres familles — rien ne sort du cadre quand
+   une valeur est écartée du calcul du maximum —, plus un que ces figures
+   imposent : une valeur continue peut valoir zéro, et le logarithme de zéro
+   n'existe pas. Un NaN glissé dans une coordonnée vide la figure sans rien
+   signaler. */
+const { colonnesMontants: colM, barresMontants: barM, volumeValeur: volM,
+        cumulTemporel: cumM, bandeDispersion: bandeM,
+        classementMontants: classeM, concentration: concM } =
+  await import('/home/claude/valo/js/ui/montants.js');
+
+const attributsNaN = svg => {
+  const fautifs = [];
+  svg.querySelectorAll('*').forEach(e => {
+    [...e.attributes].forEach(a => {
+      if (/NaN|Infinity|undefined/.test(a.value)) fautifs.push(`${e.tagName}.${a.name}=${a.value}`);
+    });
+  });
+  return fautifs;
+};
+const dansLeCadre = (svg, largeur) => {
+  const hauteur = +svg.getAttribute('height');
+  const debords = boitesDe(svg, largeur, hauteur);
+  svg.querySelectorAll('circle').forEach(c => {
+    const x = +c.getAttribute('cx'), y = +c.getAttribute('cy'), r = +c.getAttribute('r');
+    if (x - r < -1 || y - r < -1 || x + r > largeur + 1 || y + r > hauteur + 1) {
+      debords.push({ cx: Math.round(x), cy: Math.round(y), r });
+    }
+  });
+  return debords;
+};
+
+/* Un regroupement portant cent fois les montants des autres : c'est la
+   configuration qui a fait déborder six familles de figures de suite. */
+const lignesMont = [
+  { valeur: '2021', total: 120000, nb: 8 },
+  { valeur: '2022', total: 340000, nb: 14 },
+  { valeur: '2023', total: 95000, nb: 6 },
+  { valeur: 'Montant non renseigné', total: 0, nb: 3, horsEchelle: true },
+  { valeur: 'Autres', total: 40000000, nb: 210, autres: true, horsEchelle: true },
+];
+[false, true].forEach(log => {
+  const nom = log ? 'logarithmique' : 'linéaire';
+  const c = colM({ lignes: lignesMont, largeur: 700, hauteur: 300, log,
+                   formater: v => `${Math.round(v / 1000)} k` });
+  t(`colonnes de montants (${nom}) : rien ne sort du cadre`,
+    dansLeCadre(c, 700).length === 0, dansLeCadre(c, 700));
+  t(`colonnes de montants (${nom}) : aucune coordonnée invalide`,
+    attributsNaN(c).length === 0, attributsNaN(c));
+
+  const b = barM({ lignes: lignesMont, largeur: 700, log,
+                   formater: v => `${Math.round(v / 1000)} k` });
+  t(`barres de montants (${nom}) : rien ne sort du cadre`,
+    dansLeCadre(b, 700).length === 0, dansLeCadre(b, 700));
+  t(`barres de montants (${nom}) : aucune coordonnée invalide`,
+    attributsNaN(b).length === 0, attributsNaN(b));
+});
+
+/* Le montant est écrit, pas seulement dessiné : c'est ce que la version en
+   courbes de distribution avait perdu, et la raison de cette refonte. */
+const colLisible = colM({ lignes: lignesMont.slice(0, 3), largeur: 700, hauteur: 300,
+                          formater: v => `${Math.round(v / 1000)} k€` });
+t('colonnes de montants : chaque colonne porte son montant',
+  ['120 k€', '340 k€', '95 k€'].every(v => colLisible.textContent.includes(v)),
+  colLisible.textContent);
+t('colonnes de montants : chaque colonne porte son nombre d’opérations',
+  ['8 op.', '14 op.', '6 op.'].every(v => colLisible.textContent.includes(v)),
+  colLisible.textContent);
+
+/* Les graduations d'un axe portent une seule unité. Elles sortaient en « 0 »,
+   « 5 000 € », « 10 k€ », « 15 k€ » : l'œil devait convertir pour comparer deux
+   repères voisins. */
+const { graduationsMontant } = await import('/home/claude/valo/js/ui/montants.js');
+const uniforme = svg => {
+  const suffixes = new Set([...svg.querySelectorAll('.figure-axe')]
+    .map(e => (e.textContent.match(/(M€|k€|€)$/) || [])[1])
+    .filter(Boolean));
+  return suffixes.size <= 1 ? null : [...suffixes];
+};
+const colUnite = colM({
+  lignes: [{ valeur: '2021', total: 3000, nb: 2 }, { valeur: '2022', total: 16000, nb: 5 }],
+  largeur: 700, hauteur: 300 });
+t('graduations : une seule unité sur tout l’axe', uniforme(colUnite) === null, uniforme(colUnite));
+t('graduations : le million s’écrit en M€',
+  graduationsMontant(2e6)(1.5e6) === '1,5 M€', graduationsMontant(2e6)(1.5e6));
+t('graduations : le millier s’écrit en k€',
+  graduationsMontant(2e4)(5000) === '5 k€', graduationsMontant(2e4)(5000));
+t('graduations : zéro reste zéro', graduationsMontant(2e6)(0) === '0');
+
+/* Volume contre valeur : la droite de référence doit exister, sans quoi rien
+   ne dit ce qui est « gros ». */
+const vol = volM({ points: lignesMont, largeur: 700, hauteur: 320,
+                   formater: v => `${Math.round(v / 1000)} k` });
+t('volume contre valeur : rien ne sort du cadre', dansLeCadre(vol, 700).length === 0,
+  dansLeCadre(vol, 700));
+t('volume contre valeur : aucune coordonnée invalide',
+  attributsNaN(vol).length === 0, attributsNaN(vol));
+t('volume contre valeur : la référence du montant moyen est tracée',
+  /montant moyen/.test(vol.textContent), vol.textContent.slice(0, 120));
+
+/* Un axe de dénombrement se gradue en entiers. Sur trois catégories, le pas
+   calculé librement valait 0,2 et l'axe sortait « 0 0 0 1 1 1 ». */
+const volPetit = volM({
+  points: [{ valeur: 'A', nb: 1, total: 5000 }, { valeur: 'B', nb: 2, total: 9000 },
+           { valeur: 'C', nb: 3, total: 12000 }],
+  largeur: 700, hauteur: 320 });
+/* Les graduations de montants sont alignées à droite, celles du dénombrement
+   centrées sous l'axe : c'est ce qui les distingue sans les nommer. */
+const etiquettesNb = [...volPetit.querySelectorAll('.figure-axe')]
+  .filter(e => e.getAttribute('text-anchor') === 'middle')
+  .map(e => e.textContent);
+t('axe de dénombrement : pas d’étiquette répétée',
+  new Set(etiquettesNb).size === etiquettesNb.length, etiquettesNb);
+
+/* Une absence garde son menu ; seul le regroupement en est privé. C'est la
+   règle de toutes les autres figures de l'outil, et elle n'y était pas. */
+const vus = [];
+colM({
+  lignes: [
+    { valeur: '2022', total: 10000, nb: 3 },
+    { valeur: 'Montant non renseigné', total: 2000, nb: 1, horsEchelle: true },
+    { valeur: 'Autres', total: 5000, nb: 9, autres: true, horsEchelle: true },
+  ],
+  largeur: 700, hauteur: 300, onMenu: (el, valeur) => vus.push(valeur),
+});
+t('une absence garde son menu contextuel',
+  vus.includes('Montant non renseigné'), vus);
+t('le regroupement n’a pas de menu', !vus.includes('Autres'), vus);
+
+/* Les points d'une bande se comptent par centaines : les mettre dans le
+   parcours au clavier y enfermerait la navigation. Le rang, lui, y reste. */
+const bandeClavier = bandeM({
+  groupes: [{ valeur: 'Convention',
+               points: Array.from({ length: 30 }, (_, i) =>
+                   ({ cle: 'o' + i, titre: 'C' + i, montant: 1000 + i * 700 })) }],
+  largeur: 700,
+  onClic: () => {}, onMenuPoint: () => {} });
+t('bande : les points restent hors du parcours au clavier',
+  [...bandeClavier.querySelectorAll('.zone-operation')]
+      .every(z => !z.hasAttribute('tabindex'))
+  && bandeClavier.querySelectorAll('.zone-operation').length === 30,
+  bandeClavier.querySelectorAll('.zone-operation').length);
+t('bande : le rang reste atteignable au clavier',
+  [...bandeClavier.querySelectorAll('rect[role="button"]')]
+      .some(z => z.getAttribute('tabindex') === '0'));
+
+/* Cumul : croissant par construction, et la dernière étape vaut le total. */
+const cum = cumM({ lignes: lignesMont.slice(0, 3), largeur: 700, hauteur: 280,
+                   formater: v => String(Math.round(v)) });
+t('cumul : rien ne sort du cadre', dansLeCadre(cum, 700).length === 0, dansLeCadre(cum, 700));
+t('cumul : aucune coordonnée invalide', attributsNaN(cum).length === 0, attributsNaN(cum));
+t('cumul : la courbe ne redescend jamais',
+  (() => {
+    const ys = [...cum.querySelectorAll('.barre circle')].map(c => +c.getAttribute('cy'));
+    return ys.every((y, i) => i === 0 || y <= ys[i - 1] + 0.01);
+  })());
+t('cumul : le total est annoncé',
+  cum.textContent.includes(String(120000 + 340000 + 95000)), cum.textContent.slice(0, 80));
+
+/* Bande de dispersion : un point par opération, et chacun désignable. */
+const ptsMont = n => Array.from({ length: n }, (_, i) => ({
+  cle: 'o' + i, titre: 'Contrat ' + i, montant: [800, 12000, 90000, 0, 1200000][i % 5],
+}));
+const groupesBande = [
+  { valeur: 'Convention', points: ptsMont(40) },
+  { valeur: 'Autres', horsEchelle: true,
+    points: ptsMont(6).map(p => ({ ...p, montant: p.montant * 100 })) },
+];
+[false, true].forEach(log => {
+  const nom = log ? 'logarithmique' : 'linéaire';
+  const bd = bandeM({ groupes: groupesBande, largeur: 700, log,
+                      formater: v => `${Math.round(v / 1000)} k` });
+  t(`bande (${nom}) : rien ne sort du cadre`, dansLeCadre(bd, 700).length === 0,
+    dansLeCadre(bd, 700));
+  t(`bande (${nom}) : aucune coordonnée invalide`,
+    attributsNaN(bd).length === 0, attributsNaN(bd));
+  t(`bande (${nom}) : un point par opération`,
+    bd.querySelectorAll('.point-operation').length === 46,
+    bd.querySelectorAll('.point-operation').length);
+});
+/* Le disque ne doit pas intercepter le pointeur : sa zone le précède, et la
+   mise en valeur du point survolé en dépend. */
+t('bande : les disques laissent passer le pointeur',
+  [...bandeM({ groupes: groupesBande, largeur: 700 })
+      .querySelectorAll('.point-operation')]
+      .every(c => c.getAttribute('pointer-events') === 'none'));
+/* Une bande sans catégorie : un seul rang, sans colonne de libellés. */
+const bandeSeule = bandeM({ groupes: [{ valeur: '', points: ptsMont(20) }], largeur: 700 });
+t('bande sans catégorie : un seul rang',
+  bandeSeule.querySelectorAll('.barre').length === 1);
+t('bande sans catégorie : rien ne sort du cadre',
+  dansLeCadre(bandeSeule, 700).length === 0, dansLeCadre(bandeSeule, 700));
+
+/* Classement : ordre décroissant, et les deux montants imbriqués. */
+const cl = classeM({
+  points: [
+    { cle: 'a', titre: 'Gros contrat', montant: 400000, autre: 900000 },
+    { cle: 'b', titre: 'Moyen', montant: 90000, autre: 90000 },
+    { cle: 'c', titre: 'Petit', montant: 3000, autre: null },
+  ],
+  largeur: 700, formater: v => `${Math.round(v / 1000)} k`,
+});
+t('classement : rien ne sort du cadre', dansLeCadre(cl, 700).length === 0, dansLeCadre(cl, 700));
+t('classement : aucune coordonnée invalide', attributsNaN(cl).length === 0, attributsNaN(cl));
+t('classement : ordre décroissant',
+  [...cl.querySelectorAll('.barre')]
+      .map(g => +((g.getAttribute('aria-label') || '').match(/^(\d+)\./) || [])[1])
+      .every((r, i) => r === i + 1));
+/* La barre externe porte le plus élevé des deux montants : une part dessinée
+   plus longue que le total serait un contresens. */
+t('classement : la part ne dépasse pas le total',
+  [...cl.querySelectorAll('.barre')].every(g => {
+    /* Rectangles d'une ligne, dans l'ordre : piste de fond, barre externe
+       (le plus élevé des deux montants), barre imbriquée (le plus faible,
+       absente quand un seul montant est connu), zone sensible. */
+    const larges = [...g.querySelectorAll('rect')].map(r => +r.getAttribute('width'));
+    return larges.length < 4 || larges[1] >= larges[2];
+  }), [...cl.querySelectorAll('.barre')]
+        .map(g => [...g.querySelectorAll('rect')].map(r => +r.getAttribute('width'))));
+
+/* Concentration : l'énoncé qui remplace la courbe de Lorenz. */
+const conc = concM([100, 100, 100, 100, 100, 100, 100, 100, 100, 1000], 0.1);
+t('concentration : la part des plus gros est exacte',
+  conc && Math.round(conc.poids * 100) === 53, conc);
+t('concentration : une série vide ne produit rien', concM([]) === null);
+
+/* Une sélection vide ne doit pas produire de figure fautive : c'est l'état
+   qu'on traverse à chaque filtrage un peu étroit. */
+[colM, barM, volM, cumM, classeM].forEach((fig, i) => {
+  const vide = fig({ lignes: [], points: [], groupes: [], largeur: 700, hauteur: 280 });
+  t(`figure de montants ${i + 1} : une sélection vide reste dessinable`,
+    !!vide && attributsNaN(vide).length === 0, attributsNaN(vide));
+});
+t('bande : une sélection vide reste dessinable',
+  attributsNaN(bandeM({ groupes: [], largeur: 700 })).length === 0);
+
+/* Écart entre la somme des barres et le total réel, dans les deux sens.
+   La première version n'en disait qu'un : elle annonçait « au-delà du total
+   réel » aussi quand la somme passait en dessous, ce qui arrive dès qu'un
+   masquage retire toutes les valeurs d'une opération pour le champ affiché —
+   le masquage de l'université elle-même, côté partenaires, le produit d'office.
+   Le panneau est rendu pour de vrai : c'est l'agrégation qu'on vérifie, pas
+   une phrase recopiée. */
+const { Figures } = await import('/home/claude/valo/js/panels/figures.js');
+const rendreMontants = (opes, etatF, maille) => {
+  const hote = document.createElement('div');
+  const figs = new Figures(hote, {
+    source: () => 'ope', etat: () => etatF,
+    onRafraichir: () => {}, onFiltrer: () => {},
+  });
+  figs.modes.montants = 'cumules';
+  figs.categories['montants:cumules'] = maille;
+  figs.rendre(opes);
+  return [...hote.querySelectorAll('.panneau')]
+      .find(x => x.querySelector('h2')?.textContent === 'Montants');
+};
+const opeArgent = (id, budget, partenaires) => ({
+  id, kind: 'ope', titre: 'O' + id, annee: '2022', labos: ['L1', 'L2'], ecs: [],
+  partenaires: partenaires.map(nom => ({ nom, naf: 'N', type: 'T' })),
+  budget, budgetTranche: 'Moins de 5 k€', typeContrat: 'Convention',
+});
+const opesEcart = [opeArgent(1, 10000, ['P0']), opeArgent(2, 30000, ['P0', 'P1'])];
+
+const etatMasque = etatVide();
+etatMasque.masquees.add('P0');
+const pSous = rendreMontants(opesEcart, etatMasque, 'partenaire');
+t('écart négatif : les opérations sans valeur visible sont annoncées',
+  /ne figurent sur aucune barre/.test(pSous?.textContent || ''),
+  (pSous?.textContent || '').slice(-260));
+t('écart négatif : « au-delà du total réel » ne doit pas être dit',
+  !/au-delà du total réel/.test(pSous?.textContent || ''),
+  (pSous?.textContent || '').slice(-260));
+
+/* Champ multivalué sans masquage : là, la somme dépasse bel et bien. */
+const pDessus = rendreMontants(opesEcart, etatVide(), 'labo');
+t('écart positif : le double comptage est annoncé',
+  /au-delà du total réel/.test(pDessus?.textContent || ''),
+  (pDessus?.textContent || '').slice(-260));
+
+/* Maille à valeur unique : aucun écart, donc aucune note d'écart. */
+const pExact = rendreMontants(opesEcart, etatVide(), 'annee');
+t('maille à valeur unique : aucun écart annoncé',
+  !/au-delà du total réel|aucune barre/.test(pExact?.textContent || ''),
+  (pExact?.textContent || '').slice(-200));
+
+/* La concentration s'affiche comme indicateur, et seulement au-delà de dix
+   montants : sur quatre contrats, « les 10 % les plus gros » désigne un seul
+   contrat et l'énoncé ne veut rien dire. */
+const { rendreIndicateurs } = await import('/home/claude/valo/js/panels/indicateurs.js');
+const etatInd = etatVide();
+const opesArgent = n => Array.from({ length: n }, (_, i) => ({
+  id: i, kind: 'ope', titre: 'O' + i, annee: '2022', labos: ['L'], ecs: [],
+  partenaires: [{ nom: 'P', naf: 'N', type: 'T' }],
+  budget: i === 0 ? 1000 : 100, budgetTranche: 'Moins de 5 k€',
+}));
+const hoteInd = document.createElement('div');
+rendreIndicateurs(hoteInd, opesArgent(10), 'ope', etatInd);
+t('concentration : l’indicateur paraît au-delà de dix montants',
+  /les 10 % les plus gros/.test(hoteInd.textContent), hoteInd.textContent);
+t('concentration : la part annoncée est celle du calcul',
+  hoteInd.textContent.includes('53 %'), hoteInd.textContent);
+const hoteRare = document.createElement('div');
+rendreIndicateurs(hoteRare, opesArgent(4), 'ope', etatInd);
+t('concentration : l’indicateur se tait sous dix montants',
+  !/les 10 % les plus gros/.test(hoteRare.textContent), hoteRare.textContent);
+
 /* ── Une seule infobulle à la fois ──────────────────────────────────────
    Un `<title>` SVG produit une bulle native, tardive et pauvre. Là où l'outil
    affiche la sienne, les deux se superposaient. La description passe donc par

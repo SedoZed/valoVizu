@@ -32,7 +32,11 @@ export class Relations {
     constructor(hote, options) {
         this.hote = hote;
         this.o = options;
-        this.vue = 'colonnes';
+        /* La matrice est la vue d'entrée : elle donne les effectifs exacts,
+           lisibles sans survol ni estimation d'épaisseur, là où les liens et
+           le flux demandent d'apprécier des largeurs. Les deux autres restent
+           à un clic pour qui cherche la forme plutôt que les chiffres. */
+        this.vue = 'matrice';
         /* Les deux axes sont libres : laboratoire × partenaire est le
            croisement le plus demandé, mais type × laboratoire ou
            activité × année répondent à d'autres questions. */
@@ -390,7 +394,7 @@ export class Relations {
         });
         svg.appendChild(coucheLiens);
 
-        const colonne = (liste, x, ancrage, cle, selection) => {
+        const colonne = (liste, x, ancrage, cle, selection, temporel = false) => {
             liste.forEach(ligne => {
                 const y = yDe(liste, ligne.valeur);
                 const cote = ancrage === 'end' ? 'gauche' : 'droite';
@@ -434,13 +438,18 @@ export class Relations {
                     ? ligne.valeur.slice(0, 31) + '…' : ligne.valeur;
                 groupe.appendChild(t);
 
-                /* L'effectif accompagne le libellé : il évite d'avoir à
-                   survoler pour savoir ce que pèse une ligne. */
-                groupe.appendChild(Object.assign(el('text', {
-                    x: ancrage === 'end' ? x - 12 : x + 12, y: y + 14,
-                    'text-anchor': ancrage, class: 'figure-valeur',
-                    fill: 'var(--encre-3)',
-                }), { textContent: ligne.effectif }));
+                /* L'effectif accompagne le libellé, sauf sous une année.
+                   Deux nombres superposés — un millésime puis un effectif —
+                   se confondent à la lecture : on hésite sur ce que désigne
+                   le second. Ailleurs, le chiffre évite d'avoir à survoler
+                   pour savoir ce que pèse une ligne. */
+                if (!temporel) {
+                    groupe.appendChild(Object.assign(el('text', {
+                        x: ancrage === 'end' ? x - 12 : x + 12, y: y + 14,
+                        'text-anchor': ancrage, class: 'figure-valeur',
+                        fill: 'var(--encre-3)',
+                    }), { textContent: ligne.effectif }));
+                }
 
                 groupe.appendChild(el('circle', {
                     cx: x, cy: y, r: 3.5,
@@ -516,8 +525,8 @@ export class Relations {
             });
         };
 
-        colonne(gauche, xGauche, 'end',   cleG, selG);
-        colonne(droite, xDroite, 'start', cleD, selD);
+        colonne(gauche, xGauche, 'end',   cleG, selG, defG?.nature === 'temporel');
+        colonne(droite, xDroite, 'start', cleD, selD, defD?.nature === 'temporel');
 
         corps.appendChild(svg);
         const legende = document.createElement('p');
@@ -594,7 +603,22 @@ export class Relations {
                        elle guide le regard, le chiffre reste la donnée. */
                     td.style.background =
                         `color-mix(in srgb, var(--signal) ${Math.round(12 + (v / max) * 55)}%, transparent)`;
-                    td.title = `${l.valeur} ↔ ${p.valeur} — ${v} ${this._unite()}`;
+
+                    /* La cellule agit, comme les en-têtes qui l'entourent.
+                       Elle ne le faisait pas : dans la vue désormais ouverte
+                       par défaut, le croisement le plus précis de la figure
+                       était le seul endroit inerte, alors que sa ligne et sa
+                       colonne filtraient toutes deux. */
+                    if (!l.autres && !p.autres) {
+                        td.classList.add('triable');
+                        td.title = `${l.valeur} ↔ ${p.valeur} — ${v} ${this._unite()}. `
+                                 + `Cliquer pour n’afficher que ce croisement.`;
+                        td.addEventListener('click', () =>
+                            this.o.onIsolerCroisement?.(cleG, l.valeur, cleD, p.valeur));
+                        this.o.onMenuCombinaison?.(td, cleG, l.valeur, cleD, p.valeur, v);
+                    } else {
+                        td.title = `${l.valeur} ↔ ${p.valeur} — ${v} ${this._unite()}`;
+                    }
                 }
                 tr.appendChild(td);
             });
@@ -652,6 +676,8 @@ export class Relations {
             couleurPour: v => teintes.get(v),
             titreG: defG?.libelle || cleG,
             titreD: defD?.libelle || cleD,
+            chiffresGauche: defG?.nature !== 'temporel',
+            chiffresDroite: defD?.nature !== 'temporel',
             unite: this._unite(),
             surbrillance: this.surbrillance,
             onSurvol: (cote, valeur, coucheRubans) => {

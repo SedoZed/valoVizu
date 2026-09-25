@@ -33,6 +33,10 @@ export const DEFAUTS = {
        ouvre. Un seul registre confondrait les deux et inverserait l'état
        initial de la moitié des panneaux. */
     deplies: {},
+    /* Liens vers d'autres outils, réglés par l'utilisateur. Les inscrire dans
+       le code exposerait des adresses internes et imposerait de le modifier
+       pour en ajouter un. */
+    outils: [],
 };
 
 export const preferences = { ...DEFAUTS };

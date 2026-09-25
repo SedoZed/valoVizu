@@ -33,6 +33,11 @@ export function versAdresse(source, etat) {
     Object.entries(etat.epinglees || {}).forEach(([cle, choix]) => {
         [...(choix || [])].sort().forEach(v => params.append('e.' + cle, v));
     });
+    /* Une restriction change ce qu'on voit : un lien doit la reproduire,
+       sans quoi le destinataire lirait une autre figure que celle décrite. */
+    Object.entries(etat.restrictions || {}).forEach(([id, choix]) => {
+        [...(choix || [])].sort().forEach(v => params.append('r.' + id, v));
+    });
     if (etat.recherche?.trim()) params.set('q', etat.recherche.trim());
 
     return params.toString();
@@ -49,7 +54,7 @@ export function depuisAdresse(chaine) {
     const params = new URLSearchParams(chaine.replace(/^#/, ''));
     if (![...params.keys()].length) return null;
 
-    const facettes = {}, epinglees = {};
+    const facettes = {}, epinglees = {}, restrictions = {};
     params.forEach((valeur, cle) => {
         if (cle.startsWith(PREFIXE_FACETTE)) {
             const champ = cle.slice(PREFIXE_FACETTE.length);
@@ -57,6 +62,9 @@ export function depuisAdresse(chaine) {
         } else if (cle.startsWith('e.')) {
             const champ = cle.slice(2);
             (epinglees[champ] = epinglees[champ] || new Set()).add(valeur);
+        } else if (cle.startsWith('r.')) {
+            const id = cle.slice(2);
+            (restrictions[id] = restrictions[id] || new Set()).add(valeur);
         }
     });
 
@@ -66,6 +74,7 @@ export function depuisAdresse(chaine) {
             facettes,
             masquees: new Set(params.getAll('m')),
             epinglees,
+            restrictions,
             recherche: params.get('q') || '',
         },
     };

@@ -76,6 +76,13 @@ export function enregistrerProfil(nom, source, etat, reglages) {
             Object.entries(etat.epinglees || {})
                 .filter(([, v]) => v && v.size)
                 .map(([k, v]) => [k, [...v]])),
+        /* Un profil doit reproduire ce qu'on voyait, non seulement ce qu'on
+           avait filtré : une restriction change l'image sans changer les
+           effectifs, et l'omettre rendait le profil infidèle. */
+        restrictions: Object.fromEntries(
+            Object.entries(etat.restrictions || {})
+                .filter(([, v]) => v && v.size)
+                .map(([k, v]) => [k, [...v]])),
         recherche: etat.recherche,
         renommages: reglages.renommages,
     };
@@ -112,6 +119,11 @@ export function appliquerProfil(profil, valeursConnues) {
         if (gardees.length) facettes[cle] = new Set(gardees);
     });
 
+    const restrictions = {};
+    Object.entries(profil.restrictions || {}).forEach(([cle, liste]) => {
+        restrictions[cle] = new Set(liste);
+    });
+
     const epinglees = {};
     Object.entries(profil.epinglees || {}).forEach(([cle, liste]) => {
         epinglees[cle] = new Set(liste);
@@ -122,6 +134,7 @@ export function appliquerProfil(profil, valeursConnues) {
             facettes,
             masquees: new Set(profil.masquees || []),
             epinglees,
+            restrictions,
             recherche: profil.recherche || '',
         },
         reglages: { renommages: profil.renommages || {} },

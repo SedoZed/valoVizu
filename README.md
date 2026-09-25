@@ -3,6 +3,10 @@
 Refonte. Deux tableaux de bord distincts (opérations de partenariat,
 enseignants-chercheurs) alimentés par l'API Omeka S.
 
+Ce document dit **pourquoi** l'outil est fait ainsi : les partis pris, et les
+défauts qui les ont imposés. Le `CHANGELOG.md` dit **ce qui a changé**, version
+par version.
+
 ## Installation
 
 Déposer le dossier sur le serveur. Aucune dépendance, aucune étape de
@@ -189,6 +193,140 @@ change la lecture, jamais le nombre d'opérations retenues. Cette séparation
 évite qu'un réglage d'aspect fasse bouger les chiffres à l'insu de celui qui
 le manipule — un test s'en assure.
 
+## Montants
+
+Deux champs financiers : le **budget de l'opération** (`valo:budgOPE`), part
+revenant à l'établissement, et le **montant global TTC**
+(`valo:montantGlobal`), total de l'opération tous partenaires confondus. Le
+second englobe le premier, et leur écart est lui-même une information — d'où
+le maintien des deux plutôt qu'un seul.
+
+**Un montant n'est pas une catégorie.** Tous les autres champs servent à
+compter des opérations ; un montant se mesure. Une première version l'a
+pourtant traité comme un champ nominal ordinaire, rangé en sept **tranches**
+fixes et compté en barres. La lecture était fausse par construction : une
+distribution de montants est très dissymétrique — beaucoup de petites
+opérations, quelques très grosses —, si bien que les deux premières tranches
+absorbaient l'essentiel des effectifs et que les contrats exceptionnels,
+c'est-à-dire précisément ce qu'on cherche, disparaissaient dans la dernière.
+Les tranches imposaient de surcroît une granularité arbitraire : rien ne
+distinguait 26 k€ de 49 k€.
+
+Les tranches n'ont pas disparu, elles ont changé de rôle. Elles restent en
+**facette**, où un seuil arbitraire est sans conséquence puisqu'il ne sert
+qu'à découper une sélection : « les contrats de plus de 100 k€ » est un filtre
+qu'on veut poser d'un clic. Elles ne décrivent plus rien.
+
+### Cinq lectures, et des euros écrits
+
+Une deuxième erreur a précédé la version actuelle, et mérite d'être consignée :
+les tranches ont d'abord été remplacées par des figures de **distribution** —
+courbe classée, courbe de concentration, boîtes à moustaches, nuage temporel.
+Techniquement plus justes, et moins informatives. Elles répondaient à « quelle
+est la forme statistique de la série », question que personne ne pose, et ne
+portaient **aucun chiffre lisible** là où une barre étiquetée en donnait un. Le
+défaut des tranches n'était pas « des barres » : c'était la question posée.
+
+Ce qu'aucune des deux versions ne montrait : **combien d'euros, de qui, quand.**
+C'est-à-dire des montants **cumulés par catégorie**. Le cumul avait été écarté
+par crainte du double comptage — à tort pour l'essentiel : une opération a une
+seule année et un seul type de contrat, la somme y est exacte. La difficulté ne
+concerne que les laboratoires et les partenaires, où une opération compte pour
+chacun ; la somme des barres est alors annoncée à côté du total réel, et leur
+écart se lit.
+
+**Trois réglages plutôt qu'un menu unique** : la *grandeur* décide de ce qu'on
+mesure (budget de l'opération ou montant global), la *lecture* de la manière de
+le montrer, la *maille* de la catégorie d'agrégation. Combinés en un seul menu,
+ils feraient soixante entrées pour trois décisions indépendantes.
+
+| Lecture | Ce qu'elle répond |
+|---|---|
+| **Montants cumulés** (défaut) | Combien d'euros par année, type de contrat, laboratoire, partenaire ou domaine d'activité |
+| **Volume contre valeur** | Beaucoup de petits contrats, ou peu de gros |
+| **Bande de dispersion** | À quoi ressemble le portefeuille, opération par opération |
+| **Cumul dans le temps** | La trajectoire plutôt que le rythme annuel |
+| **Les plus gros contrats** | Lesquels, avec qui, et la part de l'établissement |
+
+**Chaque figure porte ses euros et son nombre d'opérations.** C'est la règle qui
+résume la refonte : une colonne haute peut être un gros contrat ou trente
+petits, et seule la mention des deux le dit.
+
+**L'orientation se déduit du champ**, elle n'est plus un défaut global. Une
+échelle ordonnée — années, durées, tranches — se lit à la verticale : c'est la
+convention de l'histogramme, et l'axe du temps ne se met pas debout. Des
+libellés longs et sans ordre — laboratoires, partenaires — restent à
+l'horizontale, où ils tiennent. Le bouton de bascule ne sert plus qu'à passer
+outre.
+
+**La bande de dispersion remplace à elle seule trois figures écartées** — la
+répartition classée, les boîtes à moustaches et le nuage temporel. Les trois
+disaient la même chose, où se tient le gros du portefeuille et ce qui en sort,
+de trois manières abstraites. Ici les points sont les opérations elles-mêmes,
+sur un axe gradué en euros ; la médiane et l'intervalle interquartile sont
+marqués discrètement *derrière* les points, comme repères et non à leur place.
+C'est aussi la seule lecture qui n'additionne rien : une opération portée par
+deux laboratoires apparaît dans les deux rangs sans fausser aucune médiane.
+Sous cinq valeurs, les repères disparaissent — une médiane sur deux points
+donnerait une précision que la donnée ne porte pas.
+
+**La concentration a quitté les figures pour une carte d'indicateur.** « Les
+10 % des opérations les plus importantes portent 62 % des montants » est une
+phrase, pas un axe : la courbe de type Lorenz dont elle est tirée demandait
+d'interpréter un écart à une diagonale, et il fallait de toute façon en tirer
+cette phrase. La carte ne paraît qu'au-delà de dix montants renseignés — sur
+quatre contrats, « les 10 % les plus gros » désigne un seul contrat et l'énoncé
+ne veut rien dire.
+
+**Échelle linéaire ou logarithmique**, au choix, partout où un axe porte des
+montants bruts. Ni l'une ni l'autre n'est bonne en toutes circonstances : la
+linéaire dit les écarts réels mais écrase la partie basse quand le rapport
+entre montants dépasse le millier ; la logarithmique rend toute la plage
+lisible mais trompe l'œil sur ces mêmes écarts. Elle est offerte, jamais
+imposée. Les **graduations portent une seule unité** sur tout l'axe : elles
+sortaient en « 0 », « 5 000 € », « 10 k€ », « 15 k€ », et l'œil devait
+convertir pour comparer deux repères voisins.
+
+**Une opération sans montant lisible ne figure sur aucune de ces figures**, et
+le décompte des écartées s'affiche dessous, avec le total réel de la sélection.
+La ramener à zéro lui prêterait un montant nul qu'elle n'a pas ; la taire
+laisserait croire la figure exhaustive.
+
+**L'écart entre la somme des barres et le total réel est annoncé dans les deux
+sens.** Au-dessus, quand un champ multivalué fait compter une opération pour
+chacune de ses valeurs. En dessous, quand un masquage retire *toutes* les
+valeurs d'une opération pour le champ affiché — ce que le masquage de
+l'université elle-même, appliqué d'office côté partenaires, produit dès qu'une
+opération n'a pas d'autre partenaire. Annoncer « au-delà du total réel » dans
+ce second cas serait un contresens. Sous une restriction d'affichage la somme
+est plus petite par construction, et le bandeau le dit déjà : la note se tait.
+
+**Un point n'est pas une valeur à filtrer**, c'est une opération : son clic —
+gauche comme droit — ouvre le menu de l'enregistrement, d'où l'on gagne sa
+fiche Omeka S. Réserver ce menu au clic droit l'y aurait rendu introuvable,
+faute d'autre geste possible. Dans la bande de dispersion, seul le libellé du
+rang filtre : la piste est couverte de zones d'opérations, et un clic dans le
+vide ne doit pas déclencher un filtrage qu'on n'a pas visé.
+
+
+### Lire des montants saisis à la main
+
+La base ne contient que des nombres, mais sous des formes qui se
+contredisent : `123`, `123,45`, mais aussi `1 234,56`, `5000 €`, ou
+`12 000 € TTC`. Et `1.234` vaut mille deux cent trente-quatre dans une saisie
+française, un et des poussières ailleurs — d'où des règles explicites plutôt
+qu'un `parseFloat` qui trancherait au hasard.
+
+**Une valeur illisible vaut « inconnu », jamais zéro.** Un zéro se fondrait
+dans les sommes et les tirerait vers le bas sans que rien ne le signale ; une
+absence se compte et s'affiche. Sur le jeu d'essai, compter `environ 5000`
+pour zéro fait tomber le budget médian de 7 750 € à 3 501 €.
+
+Le contrôle des données signale trois choses : les **montants non
+interprétables** — plus graves qu'une absence, puisqu'ils donnent l'impression
+que le montant est connu —, les **budgets supérieurs au montant global**, qui
+trahissent une inversion des deux champs, et les **budgets manquants**.
+
 ## Modes de lecture
 
 Un panneau peut proposer plusieurs lectures de la même donnée, nommées par ce
@@ -240,6 +378,13 @@ un libellé long se lit mieux à l'horizontale, une série chronologique à la
 verticale. Le choix vaut aussi pour les figures décomposées, qui passent alors
 des barres empilées aux colonnes empilées.
 
+Sur le panneau des montants, le sens n'est plus un défaut global mais se
+**déduit du champ** : une échelle ordonnée — années, durées, tranches — se lit
+à la verticale, c'est la convention de l'histogramme et l'axe du temps ne se
+met pas debout ; des libellés longs et sans ordre restent à l'horizontale, où
+ils tiennent. Le bouton ne sert alors qu'à passer outre. Les autres panneaux
+gardent leur défaut historique, le champ n'y changeant pas d'un mode à l'autre.
+
 ## Nuage de mots
 
 Les mots-clés s'affichent en nuage plutôt qu'en barres. Ni le regroupement ni
@@ -282,6 +427,14 @@ Le nuage porte le compte des termes affichés et de ceux que la sélection
 contient. Avec plusieurs milliers de mots-clés distincts, l'image reste dense
 après un filtrage et paraît ne pas avoir bougé, alors que son contenu a
 entièrement changé : le compte rend ce lien lisible.
+
+## Limites de la donnée
+
+Certaines figures portent une mention sur ce que les données ne disent pas.
+*Durée des partenariats par laboratoire* signale qu'avant 2020, tous les
+contrats ne figuraient pas dans GFC : un creux y traduit un défaut de
+versement autant qu'une baisse d'activité. Sans cette mention, une frise qui
+remonte à 2015 laisse lire une lacune de saisie comme un fait.
 
 ## Échelle des figures
 
@@ -370,6 +523,56 @@ Le réglage *Valeurs détaillées* fixe le nombre de valeurs représentées avan
 regroupement. Le regroupement « Autres » se déplie sur son contenu, et la
 somme des barres égale toujours l'effectif de la sélection — c'est ce que
 vérifie l'un des tests.
+
+## Charte graphique
+
+L'interface reprend l'identité visuelle de l'université Paris 8, « Université
+des Créations ». Palette du logotype primaire, telle que la définit la charte
+officielle :
+
+| | hex | Pantone |
+|---|---|---|
+| Poppy | `#E30F1B` | 485C |
+| Raspberry | `#AE164E` | 215C |
+| Purple | `#7B206B` | 255C |
+| Maroon | `#75151F` | 188C |
+| Black | `#000000` | Black 6C |
+
+Typographie : **Poppins**, police de l'identité, libre de droit. Les chiffres
+conservent une chasse fixe, sans laquelle colonnes de tableaux et axes de
+figures cessent de s'aligner.
+
+**Répartition retenue.** Raspberry porte l'interaction et la sélection : il
+appartient au rouge institutionnel, ce qui donne à l'outil son air de famille,
+tout en étant moins agressif que Poppy sur les grandes surfaces d'un tableau
+de bord. Poppy est réservé à l'avertissement, où le rouge vif est attendu — le
+garder pour cet usage évite qu'il se banalise. Maroon habille les bandeaux
+sombres, où sa profondeur convient mieux qu'un noir neutre. L'esperluette,
+symbole récurrent de la charte, est reprise en filigrane dans le bandeau.
+
+**Contrastes.** La charte demande explicitement le respect des normes
+d'accessibilité. Les quatre couleurs dépassent le seuil AA sur fond clair
+— de 4,8 pour Poppy à 11,2 pour Maroon. Aucune ne le franchit sur fond
+sombre : Raspberry n'y atteint que 2,3, Purple 1,7. Le thème sombre emploie
+donc des variantes éclaircies à ton constant, jusqu'au seuil AA. La charte ne
+fige pas de valeurs pour un fond sombre, qu'elle n'envisage que pour le
+logotype.
+
+**La palette des figures n'est pas la palette institutionnelle.** Elle s'ouvre
+sur les teintes de la charte puis s'élargit, pour la seule raison qui vaille
+ici : distinguer. Cinq couleurs ne peuvent pas séparer trente-cinq
+laboratoires, et un camaïeu de rouges rendrait les figures illisibles.
+
+**Le soulignement est réservé aux liens**, comme la charte l'exige. Les
+valeurs rapprochées du contrôle qualité, qui portaient un soulignement
+pointillé, emploient désormais un filet bas.
+
+Une vérification automatique contrôle la provenance des couleurs, la présence
+de la typographie et l'absence de soulignement hors liens.
+
+**Le logotype n'est pas fourni** : son usage est encadré par la charte, et le
+fichier doit être obtenu auprès du service communication. Il trouverait
+naturellement sa place dans le bandeau, à gauche du titre.
 
 ## Thème sombre
 
@@ -469,6 +672,44 @@ clic remplace la sélection au lieu de s'y ajouter. L'infobulle annonce le
 geste.
 
 ## Menu contextuel
+
+Les entrées sont rangées par **nature d'action**, et chaque nature a son
+verbe :
+
+- **garder** agit sur la sélection — ajouter au filtre, ne garder que cette
+  valeur, vider le filtre, masquer. Tous ces gestes changent les effectifs
+  partout dans l'outil ;
+- **afficher** agit sur le dessin d'une figure — n'afficher que cette valeur,
+  tout réafficher, remettre dans le regroupement. Aucun effectif ne change ;
+- **ouvrir** et **copier** sortent de l'outil.
+
+Employer le même mot pour deux natures différentes était la confusion la plus
+coûteuse : « n'afficher que cette valeur » désignait à la fois un filtre qui
+écarte des enregistrements et une restriction qui n'en écarte aucun, deux
+entrées voisines au libellé identique.
+
+**Les séparateurs sont posés par l'assemblage, non à la main.** Une famille
+vide disparaît sans laisser de trait, et il ne peut y avoir ni séparateur en
+tête ni deux de suite. Posés entrée par entrée, ils finissaient par isoler des
+lignes seules — trois traits pour les trois dernières — au lieu de marquer des
+familles.
+
+Masquer rejoint la famille de la sélection plutôt que d'occuper la sienne :
+comme un filtre, le geste change les effectifs partout, et sa teinte
+d'avertissement suffit à le distinguer. Une entrée seule entre deux traits
+n'est pas une famille.
+
+**Un doublon a disparu.** « Retirer les autres valeurs de ce filtre » faisait
+deux choses selon que la valeur pointée y figurait ou non : garder celle-ci
+seule — ce que « ne garder que cette valeur » dit déjà — ou vider le filtre.
+Seul le second cas subsiste, sous son nom.
+
+Une vérification porte sur la forme produite et non sur les intentions du
+code : aucun séparateur en tête ni en fin, jamais deux de suite, au plus trois
+familles, des traits rares au regard des entrées, et aucun intitulé en double
+dans un même menu.
+
+### Gestes disponibles
 
 Un clic gauche ne peut porter qu'une action, et c'est le filtrage qui l'a
 prise. Le clic droit rassemble les autres — isoler, retirer les autres
@@ -884,6 +1125,142 @@ panneau qui demande à l'utilisateur de formuler sa question est un corps
 anticipés, et ce sont rarement les plus intéressants. Il consomme les mêmes
 fonctions que les autres panneaux, si bien que ce qu'on y lit concorde avec le
 reste, filtres et masquages compris.
+
+## Deux champs voisins : type et domaine d'activité
+
+Le **type de partenaire** — une dizaine de valeurs contrôlées, Université,
+Entreprise, Association — et le **domaine d'activité**, tiré du code NAF, qui
+en compte plusieurs dizaines, se ressemblaient à l'oreille sous leurs anciens
+intitulés. Le second s'appelle désormais « Domaine d'activité du partenaire ».
+
+Le panneau *Années et partenaires* offre les deux lectures plutôt que d'en
+imposer une, avec les années seules en troisième. Le type reste l'entrée : une
+colonne empilée à trente segments est illisible, là où dix types se lisent
+d'un coup d'œil.
+
+Retirer la série d'un croisement le ramène à une figure simple sur son axe :
+la forme suit le mode, sans quoi le panneau tenterait d'empiler une série
+unique.
+
+## Restreindre l'affichage d'une figure
+
+Le clic droit sur une valeur propose « **N'afficher que cette valeur ici** ».
+La figure ne dessine plus que celle-là ; le reste du tableau de bord ne bouge
+pas.
+
+**Rien ne se recalcule.** Une restriction ne filtre pas : elle dit à une
+figure de ne pas dessiner certaines de ses valeurs. Aucun effectif ne change,
+aucun enregistrement n'est écarté — la même barre est montrée seule. C'est ce
+qui permet de la poser sans que la légende, les totaux ou les figures voisines
+cessent d'être exacts, et c'est la raison de ce choix plutôt qu'un filtre
+local : une figure recalculée sur un sous-ensemble afficherait des chiffres
+que la légende ne décrit plus.
+
+Ce qui en découle :
+
+- **Chaque figure garde la sienne.** C'est ce qui permet de comparer une
+  figure restreinte à un laboratoire avec ses voisines restées générales.
+- **La figure le dit**, dans un bandeau qui rappelle que les effectifs sont
+  inchangés, compte les valeurs non dessinées et offre de tout réafficher.
+  Sans lui, la figure paraîtrait décrire toute la sélection.
+- **L'export emporte cette mention.** La légende incrustée reprend la
+  restriction de cette figure-là, sans quoi l'image sortirait muette sur ce
+  qu'elle ne montre pas.
+- **La légende générale la signale** — « 2 figures à affichage restreint » —
+  mais sommairement : y dire quelle figure montre quoi laisserait croire que
+  les effectifs annoncés en dépendent.
+- **Elle s'annule et se partage comme un filtre**, puisqu'elle change ce qu'on
+  voit. `Ctrl+Z` la lève, un lien la reproduit.
+- **Le regroupement est levé** quand elle agit : « Autres » désignerait les
+  valeurs qu'on vient justement d'écarter.
+
+**La restriction est liée au champ représenté, non au seul panneau.** Un mode
+change le champ sans changer l'identité de la figure : une restriction posée
+sur un laboratoire se serait appliquée à des statuts au passage en « Statuts
+seuls », aucune valeur n'aurait correspondu et la figure se serait vidée sans
+rien dire.
+
+**Une restriction devenue sans objet se signale.** La sélection a pu changer
+depuis qu'elle a été posée, et les valeurs retenues n'existent plus
+forcément : la figure se viderait alors en silence et l'on chercherait la
+panne du mauvais côté.
+
+**Un bouton lève toutes les restrictions d'un coup**, sous la réinitialisation
+des filtres. Celle-ci ne les touche pas, et c'est juste — une restriction
+n'écarte aucun enregistrement, elle ne compte donc pas parmi les filtres. Mais
+rien ne permettait alors de les lever ensemble, et quatre figures restreintes
+demandaient quatre gestes.
+
+**Les profils les emportent**, comme les filtres : un profil doit reproduire
+ce qu'on voyait, non seulement ce qu'on avait filtré.
+
+Le geste n'est proposé que là où il agit — barres, colonnes, barres empilées,
+nuage de mots, frise. Offrir une entrée de menu sans effet ailleurs serait
+l'hétérogénéité qu'on venait de corriger.
+
+## Cohérence du filtrage
+
+Le filtrage part d'une douzaine d'endroits : facettes, figures, matrice, flux,
+liens, réseau, tableau, partenaires, contrôle des données, atelier. Tous
+mènent au même point de vérité, et tous les panneaux reçoivent la même
+sélection filtrée — seules les facettes lisent le corpus entier, pour afficher
+leurs compteurs contextuels.
+
+Vérifier chaque point à la main laisse passer celui qu'on oublie, et un oubli
+ne se voit pas : l'élément reste cliquable, le clic ne fait simplement rien.
+Un **balayage systématique** prend donc chaque famille d'éléments cliquables,
+clique, et constate que la sélection a bougé. Il porte sur le comportement et
+non sur le câblage : un gestionnaire branché sur la mauvaise clé y échoue.
+
+Deux défauts en sont sortis, tous deux invisibles à l'usage :
+
+- **Les cellules de la matrice** n'avaient ni clic ni menu. Dans la vue
+  désormais ouverte par défaut, le croisement le plus précis de la figure
+  était le seul endroit inerte, alors que sa ligne et sa colonne filtraient
+  toutes deux. Une cellule désigne une intersection, non une valeur :
+  « ajouter au filtre » n'y aurait pas de sens — ajouter la ligne ou la
+  colonne ? Le clic retient donc les deux, et le clic droit ouvre le menu de
+  combinaison.
+- **Les disques temporels** recevaient leurs rappels de clic et de menu sans
+  jamais les brancher. La figure était la seule de l'outil où désigner une
+  valeur ne faisait rien, sans que rien ne le laisse voir.
+
+## Renvois vers Omeka S
+
+Les fiches s'ouvrent dans l'**interface d'administration** :
+`{racine}/admin/item/{id}`, la racine étant déduite de l'adresse de l'API par
+retrait du segment `/api`. C'est là qu'on consulte et qu'on corrige ; la
+connexion est requise, ce qui est cohérent avec cet usage.
+
+**Le lien du tableau était cassé.** Il pointait sur l'`@id` renvoyé par l'API,
+qui désigne la ressource JSON et non une page lisible : il menait à du texte
+brut. Le panneau des partenaires, lui, chargeait l'adresse sans jamais
+l'afficher — la fiche y était inatteignable, et son identifiant n'était même
+pas repris dans les fiches agrégées.
+
+Le renvoi est aussi proposé **au clic droit sur une valeur** dans les figures,
+les facettes et les tableaux, lorsque cette valeur provient d'un item lié :
+partenaire, type de partenaire, code d'activité, type de contrat. Leur
+identifiant Omeka est désormais conservé au chargement, alors qu'il était
+jusqu'ici jeté une fois le libellé résolu.
+
+Les champs **calculés** — année, tranche de durée, laboratoire déduit — n'ont
+pas de fiche. Le renvoi n'y est pas proposé, plutôt que de mener à une page
+inexistante.
+
+Le clic gauche continue de filtrer, partout : le renvoi est un geste
+secondaire, comme le masquage ou l'isolement.
+
+## Boîte à outils
+
+Un menu en haut à gauche rassemble des liens vers d'autres outils. Ils sont
+réglés depuis *Configuration → Outils* et conservés dans le navigateur, non
+inscrits dans le code : une liste codée en dur exposerait des adresses
+internes dans un dépôt publié et imposerait de modifier le code pour ajouter
+un outil.
+
+L'instance Omeka S y figure d'office, son adresse étant déduite de celle de
+l'API. Elle suit donc la configuration et n'a pas à être saisie.
 
 ## État d'avancement
 

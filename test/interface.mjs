@@ -4,7 +4,7 @@
  * (clics, saisies). Vérifie que le rendu, les filtres et les compteurs
  * fonctionnent ensemble — ce que les tests unitaires ne montrent pas.
  */
-import { JSDOM } from 'jsdom';
+import { JSDOM, VirtualConsole } from 'jsdom';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -49,7 +49,12 @@ const PARTENAIRES = [
 ];
 
 const OPES = [
+    /* Montants sous quatre formes : nombre simple, décimale à la virgule,
+       absence, et saisie illisible. Sans cette variété, ni l'analyse ni le
+       contrôle des données ne seraient exercés. */
     { 'o:id': 200, 'o:title': 'OPE-2022-0001',
+      'valo:budgOPE': [{ '@value': '12 000 €' }],
+      'valo:montantGlobal': [{ '@value': '45000' }],
       'dcterms:title': [{ '@value': 'OPE-2022-0001' }],
       'curation:start': [{ '@value': '01/06/22' }],
       'curation:end':   [{ '@value': '31/12/23' }],
@@ -58,6 +63,9 @@ const OPES = [
       'valo:opeCollabLabo': [{ value_resource_id: 300, display_title: 'LLCP' }],
       'valo:ecImplique': [{ value_resource_id: 400, display_title: 'Durand Marie' }] },
     { 'o:id': 201, 'o:title': 'OPE-2023-0002',
+      'valo:budgOPE': [{ '@value': '3500,50' }],
+      /* Budget supérieur au montant global : incohérence à signaler. */
+      'valo:montantGlobal': [{ '@value': '2000' }],
       'dcterms:title': [{ '@value': 'OPE-2023-0002' }],
       /* Saisi en clair plutôt que lié : les deux formes doivent être lues. */
       'valo:opeType': [{ '@value': 'Contrat de collaboration' }],
@@ -65,6 +73,7 @@ const OPES = [
       'valo:opeCollabLabo': [{ value_resource_id: 301, display_title: 'CEMTI' }],
       'valo:ecImplique': [] },
     { 'o:id': 203, 'o:title': 'Contrat atypique',
+      'valo:budgOPE': [{ '@value': 'environ 5000' }],
       'dcterms:title': [{ '@value': 'Contrat atypique' }],
       /* Noms de propriétés volontairement inattendus : vérifie que la
          détection par nom prend le relais de la liste explicite. */
@@ -132,8 +141,24 @@ function repondre(url) {
 const html = readFileSync(join(racine, 'index.html'), 'utf8');
 const css  = readFileSync(join(racine, 'css/style.css'), 'utf8');
 
-const dom = new JSDOM(html, { url: 'http://localhost/', runScripts: 'outside-only' });
+/* Sentinelle d'erreurs.
+   Une exception levée dans un gestionnaire d'événement — un clic, un
+   changement de sélecteur — n'interrompt pas la suite : jsdom l'avale et la
+   vérification suivante passe comme si de rien n'était. Une figure pouvait
+   donc se casser à l'usage sans qu'aucun test ne bronche. Elles sont
+   désormais relevées et comptées à la fin. */
+const incidents = [];
+const consoleVirtuelle = new VirtualConsole();
+consoleVirtuelle.on('jsdomError', e => incidents.push(`jsdom : ${e.message}`));
+consoleVirtuelle.on('error', (...args) => incidents.push(`console.error : ${args.join(' ')}`));
+
+const dom = new JSDOM(html, {
+    url: 'http://localhost/', runScripts: 'outside-only',
+    virtualConsole: consoleVirtuelle,
+});
 const w = dom.window;
+w.addEventListener('error', e => incidents.push(`onerror : ${e.message || e.error}`));
+w.addEventListener('unhandledrejection', e => incidents.push(`promesse : ${e.reason}`));
 globalThis.window = w;
 globalThis.document = w.document;
 
@@ -295,7 +320,43 @@ const valeurs = [...w.document.querySelectorAll('.indicateur-valeur')].map(e => 
 t('indicateurs rendus', valeurs.length >= 4, valeurs);
 t('effectif exact', valeurs[0] === '4', valeurs[0]);
 t('partenaires distincts', valeurs[1] === '3', valeurs[1]);
-t('période couverte', valeurs[valeurs.length - 1] === '2021–2023', valeurs);
+t('période couverte', valeurs.includes('2021–2023'), valeurs);
+
+/* ── Montants ──
+   Les sommes portent sur les opérations de la sélection, chacune comptée une
+   fois : c'est le seul endroit où le total est exact. */
+const libelles = [...w.document.querySelectorAll('.indicateur-libelle')]
+    .map(e => e.textContent);
+t('budget cumulé affiché', libelles.includes('budget cumulé'), libelles);
+t('montant global cumulé affiché', libelles.includes('montant global cumulé'), libelles);
+t('budget médian affiché', libelles.includes('budget médian'), libelles);
+
+const carteDe = nom => valeurs[libelles.indexOf(nom)];
+/* 12 000 + 3 500,50 = 15 500,50, arrondi au millier près. */
+t('somme des budgets exacte', carteDe('budget cumulé') === '16 k€',
+  carteDe('budget cumulé'));
+/* 45 000 + 2 000 : le montant global se cumule à part. */
+t('somme des montants globaux exacte', carteDe('montant global cumulé') === '47 k€',
+  carteDe('montant global cumulé'));
+/* Médiane de deux valeurs : leur moyenne, et non la moyenne de la série. */
+const sansEspacesFines = t2 => String(t2 || '').replace(/[\u00A0\u202F\s]/g, ' ');
+t('médiane et non moyenne',
+  sansEspacesFines(carteDe('budget médian')) === '7 750 €',
+  JSON.stringify(carteDe('budget médian')));
+
+/* Une valeur illisible ne doit jamais compter pour zéro : elle tirerait la
+   somme vers le bas sans que rien ne le signale. */
+/* « environ 5000 » est illisible : s'il comptait pour zéro, la médiane
+   tomberait à 3 500 € au lieu de 7 750 €. */
+t('la saisie illisible ne compte pas pour zéro',
+  sansEspacesFines(carteDe('budget médian')) !== '3 500 €',
+  carteDe('budget médian'));
+t('le taux de renseignement accompagne la somme',
+  /2 opération|50 %/.test(
+    [...w.document.querySelectorAll('.indicateur')]
+      .find(c => c.textContent.includes('budget cumulé'))?.title || ''),
+  [...w.document.querySelectorAll('.indicateur')]
+      .find(c => c.textContent.includes('budget cumulé'))?.title);
 
 /* Légende */
 t('légende renseignée', $('legende-texte').textContent.startsWith('4 opérations'),
@@ -304,7 +365,7 @@ t('ligne de source présente', $('legende-source').textContent.includes('extract
 
 /* Facettes */
 const titres = [...w.document.querySelectorAll('.facette-tete h3')].map(e => e.textContent);
-t('sept facettes', titres.length === 7, titres);
+t('neuf facettes', titres.length === 9, titres);
 t('facette durée présente', titres.includes('Durée'), titres);
 t('facette type de contrat présente', titres.includes('Type de contrat'), titres);
 t('facette type présente', titres.includes('Type de partenaire'), titres);
@@ -450,7 +511,7 @@ const titresFig = [...w.document.querySelectorAll('#figures .panneau-tete h2')]
     .map(e => e.textContent);
 t('panneau des années', titresFig.includes('Opérations par année'), titresFig);
 t('panneau des partenaires', titresFig.includes('Partenaires'), titresFig);
-t('panneau croisé', titresFig.includes('Années et types de partenaires'), titresFig);
+t('panneau croisé', titresFig.includes('Années et partenaires'), titresFig);
 
 const svgs = w.document.querySelectorAll('#figures svg.figure');
 t('figures produites en SVG', svgs.length >= 5, svgs.length);
@@ -565,7 +626,8 @@ t('facette Durée conservée', titresFacettes.includes('Durée'));
 
 /* Onglets de la configuration */
 const ongletsModale = w.document.querySelectorAll('.onglets-modale .onglet');
-t('trois onglets de configuration', ongletsModale.length === 3, ongletsModale.length);
+t('quatre onglets de configuration', ongletsModale.length === 4,
+  [...ongletsModale].map(o => o.textContent));
 t('volet connexion affiché par défaut', !$('volet-connexion').hidden);
 t('volet paramètres masqué', $('volet-parametres').hidden);
 ongletsModale[1].click();
@@ -633,8 +695,33 @@ t('vues nommées', [...ongletsVue].map(o => o.textContent).join('|') === 'Liens|
   [...ongletsVue].map(o => o.textContent));
 
 /* Vue liens, affichée par défaut */
-t('liens par défaut', ongletsVue[0].classList.contains('actif'));
-t('liens tracés', w.document.querySelectorAll('.lien-relation').length > 0);
+/* La matrice est la vue d'entrée : elle donne les effectifs exacts, lisibles
+   sans survol ni estimation d'épaisseur. */
+t('matrice par défaut', ongletsVue[2].classList.contains('actif'),
+  [...ongletsVue].map(o => o.className));
+t('matrice tracée', w.document.querySelectorAll('.matrice-cellule, .matrice td').length > 0);
+
+ongletsVue[0].click();
+await attendre(80);
+t('liens accessibles', w.document.querySelectorAll('.lien-relation').length > 0);
+
+/* Sous une année, l'effectif n'est pas inscrit : deux nombres superposés se
+   confondent à la lecture. */
+const axesVue = w.document.querySelectorAll('.relations-axes select');
+if ([...axesVue[0].options].some(o => o.value === 'annee')) {
+    const axeAvant = axesVue[0].value;
+    axesVue[0].value = 'annee';
+    axesVue[0].dispatchEvent(new w.Event('change'));
+    await attendre(80);
+    const chiffres = [...w.document.querySelectorAll('#relations .figure-valeur')]
+        .map(e => e.textContent);
+    t('aucun effectif sous les années',
+      !chiffres.length || chiffres.every(c => /^\d{4}$/.test(c)), chiffres);
+    w.document.querySelectorAll('.relations-axes select')[0].value = axeAvant;
+    w.document.querySelectorAll('.relations-axes select')[0]
+        .dispatchEvent(new w.Event('change'));
+    await attendre(80);
+}
 
 /* Matrice : les chiffres doivent être exacts et concorder avec la sélection */
 ongletsVue[2].click();
@@ -1071,11 +1158,13 @@ const entreesMenu = menuRel ? [...menuRel.querySelectorAll('.menu-entree')] : []
 const libellesMenu = entreesMenu.map(e => e.textContent);
 t('entrée « maintenir la mise en avant » présente',
   libellesMenu.some(l => /Maintenir la mise en avant/.test(l)), libellesMenu);
-/* Elle doit se trouver entre le filtre et l'isolement, près des gestes voisins. */
+/* Les entrées sont désormais rangées par nature d'action. Ce qui importe
+   n'est plus la position absolue mais l'appartenance : un geste d'affichage
+   ne doit pas se trouver parmi les gestes de filtrage. */
 const iMaintien = libellesMenu.findIndex(l => /Maintenir la mise en avant/.test(l));
-const iIsoler   = libellesMenu.findIndex(l => /que cette valeur/.test(l));
-t('placée avant « n’afficher que cette valeur »',
-  iMaintien >= 0 && iIsoler > iMaintien, { iMaintien, iIsoler });
+const iIsoler   = libellesMenu.findIndex(l => /Ne garder que cette valeur/.test(l));
+t('rangée après les gestes de filtrage',
+  iMaintien >= 0 && iIsoler >= 0 && iMaintien > iIsoler, { iMaintien, iIsoler });
 
 entreesMenu[iMaintien].click();
 await attendre(60);
@@ -1471,11 +1560,17 @@ $('onglet-ec').click();
 await attendre(250);
 const ordreFiguresEc = [...w.document.querySelectorAll('#figures .panneau h2')]
     .map(h => h.textContent);
-t('domaines et sections en fin de liste',
-  ordreFiguresEc.indexOf('Domaines HCERES')
-      > ordreFiguresEc.indexOf('Mots-clés les plus fréquents')
-  && ordreFiguresEc.indexOf('Sections CNU') === ordreFiguresEc.length - 1,
+t('les sections CNU ferment la liste',
+  ordreFiguresEc.indexOf('Sections CNU') === ordreFiguresEc.length - 1,
   ordreFiguresEc);
+/* La figure des domaines HCERES a été retirée : la nomenclature reste
+   accessible en facette et dans les croisements, mais n'a plus de panneau. */
+t('aucune figure des domaines HCERES',
+  !ordreFiguresEc.includes('Domaines HCERES'), ordreFiguresEc);
+t('le champ domaine reste filtrable',
+  [...w.document.querySelectorAll('.facette-tete h3')]
+      .some(h => /Domaine/.test(h.textContent)),
+  [...w.document.querySelectorAll('.facette-tete h3')].map(h => h.textContent));
 $('onglet-ope').click();
 await attendre(150);
 
@@ -1550,7 +1645,7 @@ if (premierLabo) {
 
 /* Frise : repère de date et infobulle contextuelle */
 const frisePanneau = [...w.document.querySelectorAll('#figures .panneau')]
-    .find(p => /Étendue/.test(p.querySelector('h2').textContent));
+    .find(p => /Durée des partenariats/.test(p.querySelector('h2').textContent));
 t('panneau de frise présent', !!frisePanneau);
 if (frisePanneau) {
     t('segments tracés', frisePanneau.querySelectorAll('.frise-segment').length > 0);
@@ -1605,12 +1700,12 @@ if (panneauEmpile) {
         const entreesSeg = [...menuSeg.querySelectorAll('.menu-entree')]
             .map(e => e.textContent);
         t('isolement de la combinaison proposé',
-          entreesSeg.some(e => /que cette combinaison/.test(e)), entreesSeg);
+          entreesSeg.some(e => /Ne garder que ce croisement/.test(e)), entreesSeg);
 
         const avantCombinaison = Object.keys(app.etat().facettes)
             .filter(k => app.etat().facettes[k]?.size).length;
         [...menuSeg.querySelectorAll('.menu-entree')]
-            .find(e => /que cette combinaison/.test(e.textContent)).click();
+            .find(e => /Ne garder que ce croisement/.test(e.textContent)).click();
         await attendre(80);
         const apresCombinaison = Object.entries(app.etat().facettes)
             .filter(([, v]) => v?.size);
@@ -1729,6 +1824,250 @@ await attendre(80);
 
 console.log(`  ${ok - avantH} vérifications passées`);
 
+console.log('\nCroisement années et partenaires');
+const avantCr = ok;
+
+const panneauCroise = [...w.document.querySelectorAll('#figures .panneau')]
+    .find(p => p.querySelector('h2').textContent === 'Années et partenaires');
+t('panneau présent', !!panneauCroise);
+
+if (panneauCroise) {
+    const menuCr = panneauCroise.querySelector('.reglage-mode select');
+    const lecturesCr = [...menuCr.options].map(o => o.textContent);
+    t('trois lectures proposées', lecturesCr.length === 3, lecturesCr);
+    t('types de partenaire par défaut', menuCr.value === 'type', menuCr.value);
+    t('domaines d’activité proposés',
+      lecturesCr.some(l => /domaines d’activité/.test(l)), lecturesCr);
+    t('figure empilée rendue',
+      panneauCroise.querySelectorAll('.segment').length > 0,
+      panneauCroise.querySelectorAll('.segment').length);
+
+    const totalCroise = $('legende-texte').textContent;
+    const legendeDe = el => [...el.querySelectorAll('.figure-legende-item')]
+        .map(e => e.textContent).sort();
+    const seriesType = legendeDe(panneauCroise);
+
+    /* Domaines d'activité : le croisement change de série, pas d'axe. */
+    menuCr.value = 'naf';
+    menuCr.dispatchEvent(new w.Event('change'));
+    await attendre(80);
+    let courant = [...w.document.querySelectorAll('#figures .panneau')]
+        .find(p => p.querySelector('h2').textContent === 'Années et partenaires');
+    t('bascule vers les domaines d’activité',
+      courant.querySelector('.reglage-mode select').value === 'naf');
+    t('figure toujours empilée',
+      courant.querySelectorAll('.segment').length > 0,
+      courant.querySelectorAll('.segment').length);
+    /* La série doit réellement changer : vérifier que le mode est retenu ne
+       prouve rien si la figure continue d'empiler le même champ. */
+    const seriesNaf = legendeDe(courant);
+    t('la légende énumère des domaines', seriesNaf.length > 0);
+    t('la série a changé de champ',
+      seriesNaf.join() !== seriesType.join(),
+      { type: seriesType, naf: seriesNaf });
+    t('la sélection n’a pas changé', $('legende-texte').textContent === totalCroise);
+
+    /* Années seules : la série disparaît, la figure devient simple. */
+    courant.querySelector('.reglage-mode select').value = 'annee';
+    courant.querySelector('.reglage-mode select').dispatchEvent(new w.Event('change'));
+    await attendre(80);
+    courant = [...w.document.querySelectorAll('#figures .panneau')]
+        .find(p => p.querySelector('h2').textContent === 'Années et partenaires');
+    t('plus de segments empilés',
+      courant.querySelectorAll('.segment').length === 0);
+    t('colonnes simples tracées',
+      courant.querySelectorAll('.colonne-remplissage').length > 0,
+      courant.querySelectorAll('.colonne-remplissage').length);
+    t('la sélection reste inchangée', $('legende-texte').textContent === totalCroise);
+
+    courant.querySelector('.reglage-mode select').value = 'type';
+    courant.querySelector('.reglage-mode select').dispatchEvent(new w.Event('change'));
+    await attendre(80);
+}
+
+/* La frise porte la limite des données antérieures à 2020 : un creux y
+   traduit un défaut de versement autant qu'une baisse d'activité. */
+const panneauFrise2 = [...w.document.querySelectorAll('#figures .panneau')]
+    .find(p => /Durée des partenariats/.test(p.querySelector('h2').textContent));
+t('la limite des données est signalée',
+  [...(panneauFrise2?.querySelectorAll('.note') || [])]
+      .some(n => /GFC/.test(n.textContent)),
+  [...(panneauFrise2?.querySelectorAll('.note') || [])].map(n => n.textContent.slice(0, 40)));
+
+console.log(`  ${ok - avantCr} vérifications passées`);
+
+console.log('\nRenvois vers les fiches');
+const avantFiches = ok;
+
+/* Le tableau doit viser la fiche d'administration, non la ressource JSON de
+   l'API — qui n'affiche que du texte brut. */
+const lignesTab = [...w.document.querySelectorAll('#tableau-hote tbody tr.tableau-ligne')];
+if (lignesTab.length) {
+    lignesTab[0].click();
+    await attendre(60);
+    const lienFiche = w.document.querySelector('#tableau-hote a[href*="/admin/item/"]');
+    t('lien vers la fiche d’administration', !!lienFiche,
+      w.document.querySelector('#tableau-hote a')?.getAttribute('href'));
+    t('le lien ne vise pas l’API',
+      !/\/api\//.test(lienFiche?.getAttribute('href') || ''),
+      lienFiche?.getAttribute('href'));
+    t('ouverture dans un nouvel onglet',
+      lienFiche?.target === '_blank' && /noopener/.test(lienFiche?.rel || ''));
+    lignesTab[0].click();
+    await attendre(40);
+}
+
+/* Toute ligne du tableau doit ouvrir son menu, pas seulement les cellules
+   dont la colonne correspond à un champ : la fiche de l'enregistrement
+   restait sinon inatteignable. */
+const ligneSansChamp = [...w.document.querySelectorAll('#tableau-hote tbody tr.tableau-ligne')][0];
+const celluleTitre = ligneSansChamp?.cells[0];
+celluleTitre.dispatchEvent(new w.MouseEvent('contextmenu',
+    { bubbles: true, cancelable: true, clientX: 120, clientY: 120 }));
+await attendre(40);
+const menuLigne = w.document.querySelector('.menu-contextuel');
+t('menu ouvert depuis une cellule sans champ', !!menuLigne);
+t('la fiche de l’enregistrement est proposée',
+  [...(menuLigne?.querySelectorAll('.menu-entree') || [])]
+      .some(e => /Ouvrir la fiche/.test(e.textContent)),
+  [...(menuLigne?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+w.document.body.click();
+await attendre(30);
+
+/* Le menu d'une cellule qui porte un champ doit l'emporter sur celui de la
+   ligne : le geste y désigne une valeur, non l'enregistrement. */
+const celluleChamp = [...ligneSansChamp.cells]
+    .find(td => /^\d{4}$/.test(td.textContent.trim()));
+if (celluleChamp) {
+    celluleChamp.dispatchEvent(new w.MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 130, clientY: 130 }));
+    await attendre(40);
+    const menuCellule = w.document.querySelector('.menu-contextuel');
+    t('le menu de cellule l’emporte',
+      [...(menuCellule?.querySelectorAll('.menu-entree') || [])]
+          .some(e => /Ne garder que/.test(e.textContent)),
+      [...(menuCellule?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+    t('un seul menu à la fois',
+      w.document.querySelectorAll('.menu-contextuel').length === 1);
+    w.document.body.click();
+    await attendre(30);
+}
+
+/* Le panneau des partenaires portait l'adresse sans jamais l'afficher. */
+const lienPartenaire = w.document.querySelector('#partenaires-hote a.lien-fiche');
+t('fiche accessible depuis les partenaires', !!lienPartenaire,
+  lienPartenaire?.getAttribute('href'));
+t('elle vise aussi l’administration',
+  /\/admin\/item\//.test(lienPartenaire?.getAttribute('href') || ''));
+
+/* Le clic sur ce lien ne doit pas filtrer la ligne qui l'entoure. */
+const avantClicFiche = $('legende-texte').textContent;
+lienPartenaire?.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+await attendre(60);
+t('le lien ne déclenche pas le filtrage de sa ligne',
+  $('legende-texte').textContent === avantClicFiche,
+  $('legende-texte').textContent);
+
+/* Menu contextuel : renvoi proposé pour les valeurs issues d'items liés,
+   tu pour les champs calculés. */
+const ouvrirMenuSur = async (element) => {
+    element.dispatchEvent(new w.MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 150, clientY: 150 }));
+    await attendre(40);
+    return w.document.querySelector('.menu-contextuel');
+};
+const fermerMenu = async () => { w.document.body.click(); await attendre(30); };
+
+const lignePart = w.document.querySelector('#partenaires-hote tbody tr.tableau-ligne');
+let menuF = await ouvrirMenuSur(lignePart);
+t('renvoi proposé sur un partenaire',
+  [...(menuF?.querySelectorAll('.menu-entree') || [])]
+      .some(e => /Ouvrir la fiche/.test(e.textContent)),
+  [...(menuF?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+await fermerMenu();
+
+/* Une année est calculée : elle n'a pas de fiche, et le renvoi ne doit pas
+   être proposé plutôt que de mener à une page inexistante. */
+await ouvrirFacettes();
+const etiquettesF = [...w.document.querySelectorAll('.facette-liste label')]
+    .map(e => e.textContent);
+const iAnnee = etiquettesF.findIndex(e => /^\d{4}$/.test(e));
+if (iAnnee >= 0) {
+    const puceAnnee = [...w.document.querySelectorAll('.facette-liste li')][iAnnee];
+    menuF = await ouvrirMenuSur(puceAnnee);
+    t('aucun renvoi pour une valeur calculée',
+      ![...(menuF?.querySelectorAll('.menu-entree') || [])]
+          .some(e => /Ouvrir la fiche/.test(e.textContent)),
+      [...(menuF?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+    await fermerMenu();
+}
+
+console.log(`  ${ok - avantFiches} vérifications passées`);
+
+console.log('\nBoîte à outils');
+const avantO = ok;
+
+const boutonOutils = $('outils-ouvrir');
+t('bouton de boîte à outils présent', !!boutonOutils);
+t('replié par défaut', boutonOutils.getAttribute('aria-expanded') === 'false');
+
+boutonOutils.click();
+await attendre(40);
+let panneauOutils = w.document.querySelector('.outils-panneau');
+t('panneau ouvert au clic', !!panneauOutils);
+t('l’instance Omeka S est proposée d’office',
+  [...panneauOutils.querySelectorAll('.outils-lien')]
+      .some(a => a.textContent.includes('Omeka S')),
+  [...panneauOutils.querySelectorAll('.outils-lien')].map(a => a.textContent));
+t('son adresse est déduite de celle de l’API',
+  panneauOutils.querySelector('a.outils-lien')?.getAttribute('href') === 'http://localhost',
+  panneauOutils.querySelector('a.outils-lien')?.getAttribute('href'));
+t('les liens s’ouvrent dans un nouvel onglet',
+  [...panneauOutils.querySelectorAll('a.outils-lien')]
+      .every(a => a.target === '_blank' && /noopener/.test(a.rel)));
+t('accès au réglage proposé',
+  !!panneauOutils.querySelector('.outils-regler'));
+
+w.document.body.click();
+await attendre(30);
+t('panneau refermé au clic extérieur', !w.document.querySelector('.outils-panneau'));
+
+/* Ajout d'un lien depuis la configuration. */
+$('outil-nom').value = 'Annuaire';
+$('outil-url').value = 'https://exemple.org/annuaire';
+$('outil-ajouter').click();
+await attendre(40);
+t('lien enregistré dans les préférences',
+  /Annuaire/.test(memoire.valo_preferences || ''), memoire.valo_preferences);
+
+boutonOutils.click();
+await attendre(40);
+panneauOutils = w.document.querySelector('.outils-panneau');
+t('le lien ajouté paraît dans le menu',
+  [...panneauOutils.querySelectorAll('.outils-lien')]
+      .some(a => a.textContent.includes('Annuaire')));
+w.document.body.click();
+await attendre(30);
+
+/* Une adresse incomplète est refusée : relative, elle viserait cette page. */
+$('outil-nom').value = 'Mauvais';
+$('outil-url').value = 'exemple.org/sans-protocole';
+$('outil-ajouter').click();
+await attendre(30);
+t('adresse incomplète refusée',
+  /complète/.test($('outil-erreur').textContent), $('outil-erreur').textContent);
+t('le lien fautif n’est pas enregistré',
+  !/Mauvais/.test(memoire.valo_preferences || ''));
+
+/* Retrait */
+const aRetirer = [...w.document.querySelectorAll('#outils-liste .liste-danger')];
+t('les liens réglés sont retirables', aRetirer.length === 1, aRetirer.length);
+aRetirer[0].click();
+await attendre(40);
+t('lien retiré', !/Annuaire/.test(memoire.valo_preferences || ''));
+
+console.log(`  ${ok - avantO} vérifications passées`);
+
 console.log('\nThème');
 const avantT = ok;
 
@@ -1795,6 +2134,650 @@ t('colonne durée exportée', lignesCsv[0].includes('Durée'), lignesCsv[0]);
 t('valeurs multiples séparées', lignesCsv.some(l => l.includes(' | ')), lignesCsv);
 t('guillemets échappés', !csv.includes('"""') || true);
 console.log(`  ${ok - avant3} vérifications passées`);
+
+/* ── Cohérence du filtrage : balayage systématique ────────────────────
+   Le filtrage part d'une douzaine d'endroits — facettes, figures, matrice,
+   flux, réseau, tableau, partenaires, atelier. Vérifier chacun à la main
+   laisse passer celui qu'on oublie, et un oubli ne se voit pas : l'élément
+   reste cliquable, le clic ne fait simplement rien.
+   Le balayage prend chaque famille d'éléments cliquables, clique, et
+   constate que la sélection a bougé. Il porte sur le comportement, non sur
+   le câblage : un gestionnaire branché sur la mauvaise clé échoue ici. */
+const remettreTout = async () => {
+    if (!$('reinit').hidden) { $('reinit').click(); await attendre(60); }
+    const etatCourant = app.etat();
+    if (Object.keys(etatCourant.restrictions || {}).length) {
+        etatCourant.restrictions = {};
+        app.rendre();
+        await attendre(60);
+    }
+};
+
+console.log('\nMontants : figures, tableau, contrôle');
+const avantMont = ok;
+
+$('onglet-ope').click();
+await attendre(250);
+if (!$('reinit').hidden) { $('reinit').click(); await attendre(80); }
+await ouvrirFacettes();
+
+/* Les montants sont filtrables comme tout autre champ. */
+const titresFacettesM = [...w.document.querySelectorAll('.facette-tete h3')]
+    .map(h => h.textContent);
+t('budget filtrable', titresFacettesM.includes('Budget de l’opération'), titresFacettesM);
+t('montant global filtrable', titresFacettesM.includes('Montant global (TTC)'), titresFacettesM);
+
+/* Les tranches ont quitté les figures. Elles y rangeaient les montants en
+   sept classes fixes : la distribution étant très dissymétrique, les deux
+   premières absorbaient l'essentiel des opérations et les contrats
+   exceptionnels — ce qu'on cherche — disparaissaient dans la dernière. Elles
+   restent en facette, où elles ne servent qu'à sélectionner.
+   Les figures de distribution qui les avaient remplacées ont été écartées à
+   leur tour : justes, mais muettes — elles ne portaient aucun chiffre. Ce que
+   le panneau montre désormais, ce sont des euros cumulés par catégorie. */
+const panneauMont = () => [...w.document.querySelectorAll('#figures .panneau')]
+    .find(p => p.querySelector('h2').textContent === 'Montants');
+const choisirLecture = async cle => {
+    const s = panneauMont().querySelector('.reglage-mode select');
+    s.value = cle;
+    s.dispatchEvent(new w.Event('change'));
+    await attendre(140);
+    return panneauMont();
+};
+const choisirMaille = async cle => {
+    const s = panneauMont().querySelector('.reglage-categorie select');
+    s.value = cle;
+    s.dispatchEvent(new w.Event('change'));
+    await attendre(140);
+    return panneauMont();
+};
+
+const panneauMontants = panneauMont();
+t('panneau des montants présent', !!panneauMontants);
+if (panneauMontants) {
+    const texteFig = panneauMontants.querySelector('.figure-corps')?.textContent || '';
+    const tranchesNommees = ['Moins de 5 k€', 'De 5 à 10 k€', 'Plus de 250 k€'];
+    t('aucune tranche dans la figure',
+      !tranchesNommees.some(v => texteFig.includes(v)), texteFig.slice(0, 200));
+
+    /* Le reproche fait aux courbes : aucun chiffre lisible. Une colonne de
+       montants doit porter ses euros et son nombre d'opérations. */
+    t('la figure porte des euros',
+      /\d\s*(€|k€|M€)/.test(texteFig), texteFig.slice(0, 200));
+    t('la figure porte le nombre d’opérations',
+      /\d+ op\./.test(texteFig), texteFig.slice(0, 200));
+    t('le total réel est rappelé sous la figure',
+      /Total réel de la sélection/.test(panneauMontants.textContent));
+
+    const trois = ['.reglage-mesure select', '.reglage-mode select', '.reglage-categorie select']
+        .map(sel => !!panneauMontants.querySelector(sel));
+    t('trois réglages : grandeur, lecture, maille', trois.every(Boolean), trois);
+
+    const mesureM = panneauMontants.querySelector('.reglage-mesure select');
+    t('les deux grandeurs sont proposées',
+      [...mesureM.options].some(o => /Montant global/.test(o.textContent))
+      && [...mesureM.options].some(o => /Budget/.test(o.textContent)),
+      [...mesureM.options].map(o => o.textContent));
+
+    const lectures = [...panneauMontants.querySelectorAll('.reglage-mode select option')]
+        .map(o => o.value);
+    t('les cinq lectures sont offertes',
+      ['cumules', 'volume', 'bande', 'cumul', 'classement']
+          .every(c => lectures.includes(c)), lectures);
+
+    /* Par défaut la maille est l'année, et une échelle ordonnée se lit à la
+       verticale : c'est la convention de l'histogramme. */
+    t('maille « année » par défaut',
+      panneauMontants.querySelector('.reglage-categorie select').value === 'annee');
+    t('une échelle ordonnée se lit à la verticale',
+      panneauMontants.querySelectorAll('.figure-montants .colonne').length > 0,
+      panneauMontants.querySelector('.figure-corps')?.innerHTML?.slice(0, 80));
+    t('bascule d’échelle offerte', !!panneauMontants.querySelector('.bouton-echelle'));
+    t('bascule de sens offerte', !!panneauMontants.querySelector('.bouton-sens:not(.bouton-echelle)'));
+}
+
+/* Un champ à libellés longs et sans ordre passe à l'horizontale de lui-même. */
+const pLabo = await choisirMaille('labo');
+t('un champ sans ordre se lit à l’horizontale',
+  pLabo.querySelectorAll('.figure-montants .barre').length > 0
+  && pLabo.querySelectorAll('.figure-montants .colonne').length === 0,
+  { barres: pLabo.querySelectorAll('.figure-montants .barre').length,
+    colonnes: pLabo.querySelectorAll('.figure-montants .colonne').length });
+/* Double comptage : un laboratoire multivalué fait dépasser la somme des
+   barres. Le taire laisserait croire à une erreur de saisie. */
+t('le double comptage est signalé sur un champ multivalué',
+  /somme des barres/.test(pLabo.textContent)
+  || /Total réel/.test(pLabo.textContent), pLabo.textContent.slice(-240));
+
+/* La figure filtre, comme toutes les autres. */
+const zoneLabo = pLabo.querySelector('.figure-montants .barre rect[role="button"]');
+zoneLabo?.dispatchEvent(new w.MouseEvent('click', { bubbles: true, clientX: 60, clientY: 60 }));
+await attendre(160);
+t('cliquer une barre de montants filtre la sélection',
+  !$('reinit').hidden && (w.location.hash || '').includes('f.labo'),
+  w.location.hash);
+$('reinit').click();
+await attendre(120);
+await choisirMaille('annee');
+
+/* Volume contre valeur : un point par catégorie, la référence tracée. */
+const pVol = await choisirLecture('volume');
+t('volume contre valeur : un point par catégorie',
+  pVol.querySelectorAll('.figure-montants .barre circle').length > 1,
+  pVol.querySelectorAll('.figure-montants .barre circle').length);
+t('volume contre valeur : le montant moyen sert de référence',
+  /montant moyen/.test(pVol.textContent));
+
+/* Cumul dans le temps : une courbe croissante et un total annoncé. */
+const pCumul = await choisirLecture('cumul');
+t('cumul dans le temps : la courbe ne redescend pas',
+  (() => {
+    const ys = [...pCumul.querySelectorAll('.figure-montants .barre circle')]
+        .map(c => +c.getAttribute('cy'));
+    return ys.length > 0 && ys.every((y, i) => i === 0 || y <= ys[i - 1] + 0.01);
+  })(),
+  [...pCumul.querySelectorAll('.figure-montants .barre circle')].map(c => c.getAttribute('cy')));
+t('cumul dans le temps : le total est annoncé',
+  /au total/.test(pCumul.textContent));
+
+/* Bande de dispersion : un point par opération, désignable. C'est elle qui
+   remplace à la fois la répartition classée, les boîtes à moustaches et le
+   nuage temporel. */
+const pBande = await choisirLecture('bande');
+const pointsBande = pBande.querySelectorAll('.figure-montants .point-operation');
+t('bande : un point par opération au montant renseigné',
+  pointsBande.length > 1, pointsBande.length);
+const zonePoint = pBande.querySelector('.figure-montants rect[role="button"]');
+const menuPoint = zonePoint ? await ouvrirMenuSur(zonePoint) : null;
+t('un point de la bande mène à sa fiche Omeka S',
+  [...(menuPoint?.querySelectorAll('.menu-entree') || [])]
+      .some(e => /Ouvrir la fiche/.test(e.textContent)),
+  [...(menuPoint?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+await fermerMenu();
+
+/* Classement : la seule lecture qui nomme. */
+const pClass = await choisirLecture('classement');
+const ligneClass = pClass.querySelector('.figure-montants .barre rect[role="button"]');
+const menuClass = ligneClass ? await ouvrirMenuSur(ligneClass) : null;
+t('un point de classement mène à sa fiche Omeka S',
+  [...(menuClass?.querySelectorAll('.menu-entree') || [])]
+      .some(e => /Ouvrir la fiche/.test(e.textContent)),
+  [...(menuClass?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+await fermerMenu();
+
+await choisirLecture('cumules');
+
+/* La concentration a quitté les figures pour une carte d'indicateur : une
+   statistique se lit en une phrase, pas sur un axe. Elle ne s'affiche qu'au-
+   delà de dix montants — sur quatre contrats, « les 10 % les plus gros »
+   désigne un seul contrat et l'énoncé ne veut rien dire. Le jeu d'essai en
+   compte moins : la carte doit être absente ici, et son calcul est vérifié
+   sur un jeu suffisant dans les effets de bord. */
+const cartesM = [...w.document.querySelectorAll('.indicateur')].map(c => c.textContent);
+t('les indicateurs financiers sont rendus',
+  cartesM.some(c => /budget cumulé/.test(c)), cartesM);
+t('la concentration se tait sur trop peu de montants',
+  !cartesM.some(c => /les 10 % les plus gros/i.test(c)), cartesM);
+
+/* Colonnes du tableau */
+const colonnesM = [...w.document.querySelectorAll('#tableau-hote th')].map(e => e.textContent);
+t('colonne budget', colonnesM.includes('Budget'), colonnesM);
+t('colonne montant global', colonnesM.includes('Montant global'), colonnesM);
+
+/* Contrôle des données : les trois constats propres aux montants. */
+if (!w.document.querySelector('#qualite-hote .constat')) {
+    w.document.querySelector('#panneau-qualite button[aria-expanded]')?.click();
+    await attendre(80);
+}
+const constatsM = [...w.document.querySelectorAll('#qualite-hote .constat')]
+    .map(c => c.textContent);
+t('saisie illisible signalée',
+  constatsM.some(c => /non interprétable/i.test(c)), constatsM.map(c => c.slice(0, 40)));
+t('budget supérieur au montant global signalé',
+  constatsM.some(c => /supérieur au montant/i.test(c)), constatsM.map(c => c.slice(0, 40)));
+
+console.log(`  ${ok - avantMont} vérifications passées`);
+
+console.log('\nStructure des menus');
+const avantStruct = ok;
+
+/* Les séparateurs marquent des familles d'actions. Posés à la main sur
+   chaque entrée, ils finissaient par isoler des lignes seules — un trait
+   au-dessus de chacune des trois dernières. On vérifie donc la forme
+   produite, non les intentions du code. */
+const inspecterMenu = async (selecteur, nom) => {
+    const cible = w.document.querySelector(selecteur);
+    if (!cible) { t(`${nom} : élément présent`, false, selecteur); return null; }
+    cible.dispatchEvent(new w.MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 160, clientY: 160 }));
+    await attendre(50);
+    const menu = w.document.querySelector('.menu-contextuel');
+    if (!menu) { t(`${nom} : menu ouvert`, false); return null; }
+
+    const enfants = [...menu.children]
+        .filter(e => e.classList.contains('menu-entree')
+                  || e.classList.contains('menu-separateur'))
+        .map(e => e.classList.contains('menu-separateur') ? '—' : e.textContent);
+
+    t(`${nom} : aucun séparateur en tête`, enfants[0] !== '—', enfants);
+    t(`${nom} : aucun séparateur en fin`, enfants[enfants.length - 1] !== '—', enfants);
+    t(`${nom} : jamais deux séparateurs de suite`,
+      !enfants.some((e, i) => e === '—' && enfants[i + 1] === '—'), enfants);
+
+    /* Le critère n'est pas qu'aucune famille ne soit courte — certaines le
+       sont légitimement — mais que les traits restent rares au regard des
+       entrées. Trois traits pour cinq entrées, c'est un empilement ; deux,
+       c'est un rangement. */
+    const familles = enfants.join('\u0001').split('\u0001—\u0001')
+        .map(f => f.split('\u0001').filter(Boolean));
+    const traits = enfants.filter(e => e === '—').length;
+    const lignes = enfants.length - traits;
+    t(`${nom} : séparateurs rares au regard des entrées`,
+      traits <= Math.floor(lignes / 2), { traits, lignes, familles: familles.map(f => f.length) });
+    t(`${nom} : au plus trois familles`, familles.length <= 3,
+      familles.map(f => f.length));
+
+    /* Deux entrées de même intitulé dans un même menu désignaient deux
+       natures d'action différentes — la confusion qu'on vient de lever. */
+    const libelles = enfants.filter(e => e !== '—');
+    t(`${nom} : aucun intitulé en double`,
+      new Set(libelles).size === libelles.length, libelles);
+
+    w.document.body.click();
+    await attendre(30);
+    return libelles;
+};
+
+$('onglet-ope').click();
+await attendre(250);
+if (!$('reinit').hidden) { $('reinit').click(); await attendre(80); }
+await ouvrirFacettes();
+
+const libellesValeur = await inspecterMenu('#figures .barre', 'menu d’une valeur');
+await inspecterMenu('#tableau-hote tbody tr.tableau-ligne', 'menu d’un enregistrement');
+await inspecterMenu('#partenaires-hote tbody tr.tableau-ligne', 'menu d’un partenaire');
+
+/* Un verbe par nature d'action : « garder » agit sur la sélection,
+   « afficher » sur le dessin d'une figure, « masquer » sur le périmètre. */
+if (libellesValeur) {
+    t('le filtrage emploie « garder »',
+      libellesValeur.some(l => /^Ne garder que/.test(l)), libellesValeur);
+    t('l’affichage emploie « afficher »',
+      libellesValeur.some(l => /^N’afficher que/.test(l)), libellesValeur);
+    t('les deux natures sont distinguées',
+      !libellesValeur.some(l => /^N’afficher que cette valeur$/.test(l)),
+      libellesValeur);
+}
+
+console.log(`  ${ok - avantStruct} vérifications passées`);
+
+console.log('\nRestriction d’affichage');
+const avantRestr = ok;
+
+$('onglet-ope').click();
+await attendre(250);
+if (!$('reinit').hidden) { $('reinit').click(); await attendre(80); }
+
+const figureAvec = sel => [...w.document.querySelectorAll('#figures .panneau')]
+    .find(p => p.querySelectorAll(sel).length > 1);
+const panneauR = figureAvec('.barre');
+t('figure à plusieurs barres disponible', !!panneauR);
+
+if (panneauR) {
+    const titreR = panneauR.querySelector('h2').textContent;
+    const courant = () => [...w.document.querySelectorAll('#figures .panneau')]
+        .find(p => p.querySelector('h2').textContent === titreR);
+    const barresDe = el => [...el.querySelectorAll('.barre')]
+        .map(b => (b.getAttribute('aria-label')
+                   || b.querySelector('title')?.textContent || ''));
+
+    const avantBarres = barresDe(panneauR);
+    const effectifGlobal = $('legende-texte').textContent;
+    const premiereValeur = avantBarres[0].split(' — ')[0];
+    /* L'autre figure sert de témoin : la restriction ne doit toucher qu'une
+       figure, c'est tout l'objet du geste. */
+    const temoin = [...w.document.querySelectorAll('#figures .panneau')]
+        .find(p => p.querySelector('h2').textContent !== titreR
+                && p.querySelectorAll('.barre').length > 1);
+    const avantTemoin = temoin ? barresDe(temoin).length : 0;
+
+    panneauR.querySelector('.barre').dispatchEvent(new w.MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 140, clientY: 140 }));
+    await attendre(50);
+    const menuR = w.document.querySelector('.menu-contextuel');
+    const entreeR = [...(menuR?.querySelectorAll('.menu-entree') || [])]
+        .find(e => /N’afficher que cette valeur/.test(e.textContent));
+    t('restriction proposée au menu', !!entreeR,
+      [...(menuR?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+
+    entreeR?.click();
+    await attendre(100);
+    const apres = courant();
+
+    t('la figure ne dessine plus qu’une valeur',
+      apres.querySelectorAll('.barre').length === 1,
+      barresDe(apres));
+    t('c’est bien la valeur désignée',
+      barresDe(apres)[0].startsWith(premiereValeur),
+      { attendu: premiereValeur, obtenu: barresDe(apres)[0] });
+
+    /* La promesse centrale : aucun effectif ne change. La barre restante doit
+       porter exactement le même nombre qu'avant. */
+    t('l’effectif de la barre est inchangé',
+      barresDe(apres)[0] === avantBarres[0],
+      { avant: avantBarres[0], apres: barresDe(apres)[0] });
+    t('le total de la sélection est inchangé',
+      $('legende-texte').textContent.startsWith(effectifGlobal.split(' · ')[0]),
+      $('legende-texte').textContent);
+    t('aucun filtre n’a été posé',
+      $('reinit').hidden || !/laboratoire|type|partenaire/.test($('legende-texte').textContent),
+      $('legende-texte').textContent);
+
+    t('la figure annonce sa restriction',
+      !!apres.querySelector('.note-restriction'),
+      apres.querySelector('.note')?.textContent?.slice(0, 60));
+    t('la note dit que les effectifs sont intacts',
+      /effectifs sont inchangés/.test(apres.querySelector('.note-restriction')?.textContent || ''),
+      apres.querySelector('.note-restriction')?.textContent);
+
+    /* Indépendance : les figures voisines ne bougent pas. */
+    if (temoin) {
+        const temoinApres = [...w.document.querySelectorAll('#figures .panneau')]
+            .find(p => p.querySelector('h2').textContent === temoin.querySelector('h2').textContent);
+        t('les figures voisines ne bougent pas',
+          barresDe(temoinApres).length === avantTemoin,
+          { avant: avantTemoin, apres: barresDe(temoinApres).length });
+    }
+
+    t('la légende signale la restriction',
+      /affichage restreint/.test($('legende-texte').textContent),
+      $('legende-texte').textContent);
+    t('l’adresse porte la restriction', /r\./.test(w.location.hash), w.location.hash);
+
+    /* L'annulation la lève, comme un filtre. */
+    t('annulation proposée', !$('annuler').disabled);
+    $('annuler').click();
+    await attendre(100);
+    t('l’annulation rétablit toutes les barres',
+      barresDe(courant()).length === avantBarres.length,
+      barresDe(courant()).length);
+
+    /* Le bandeau doit permettre de lever la restriction sans passer par le menu. */
+    panneauR.querySelector('.barre') && $('retablir').click();
+    await attendre(100);
+    const leverR = courant().querySelector('.note-restriction button.lien');
+    t('le bandeau porte un retour à l’affichage complet', !!leverR);
+    leverR?.click();
+    await attendre(100);
+    t('le bandeau lève la restriction',
+      !courant().querySelector('.note-restriction')
+      && barresDe(courant()).length === avantBarres.length,
+      barresDe(courant()).length);
+
+    await remettreTout();
+}
+
+/* Une restriction est liée au champ représenté, non au seul panneau : un mode
+   change le champ sans changer l'identité de la figure, et la restriction s'y
+   appliquerait à des valeurs d'une autre nature. */
+/* Tous les modes ne changent pas le champ : « Types de contrat par durée » et
+   « par année » gardent le leur et ne changent que la série. Le cas à
+   éprouver est celui où le champ change vraiment — « Laboratoires et
+   statuts » passé en « Statuts seuls ». */
+$('onglet-ec').click();
+await attendre(250);
+await remettreTout();
+const panneauModes = [...w.document.querySelectorAll('#figures .panneau')]
+    .find(p => p.querySelector('h2').textContent === 'Laboratoires et statuts');
+t('figure à modes disponible', !!panneauModes);
+if (panneauModes) {
+    const titreM = panneauModes.querySelector('h2').textContent;
+    const courantM = () => [...w.document.querySelectorAll('#figures .panneau')]
+        .find(p => p.querySelector('h2').textContent === titreM);
+
+    const barreM = panneauModes.querySelector('.barre, .segment-empile');
+    barreM.dispatchEvent(new w.MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 150, clientY: 150 }));
+    await attendre(50);
+    [...(w.document.querySelector('.menu-contextuel')?.querySelectorAll('.menu-entree') || [])]
+        .find(e => /N’afficher que cette valeur/.test(e.textContent))?.click();
+    await attendre(100);
+    t('restriction posée sur la figure à modes',
+      !!courantM().querySelector('.note-restriction'));
+
+    const menuM = courantM().querySelector('.reglage-mode select');
+    const modeAutreChamp = [...menuM.options].find(o => /Statuts/.test(o.textContent));
+    t('un mode change bien le champ représenté', !!modeAutreChamp,
+      [...menuM.options].map(o => o.textContent));
+    menuM.value = modeAutreChamp.value;
+    menuM.dispatchEvent(new w.Event('change'));
+    await attendre(100);
+
+    /* Le champ a changé : la restriction ne doit plus s'appliquer, et surtout
+       la figure ne doit pas se vider. */
+    t('la restriction ne suit pas le changement de champ',
+      !courantM().querySelector('.note-restriction'),
+      courantM().querySelector('.note-restriction')?.textContent);
+    t('la figure reste dessinée',
+      courantM().querySelectorAll('.barre, .segment-empile, .colonne-remplissage').length > 0,
+      courantM().innerHTML.slice(0, 80));
+
+    /* Le mode est propre au panneau, non à l'état : `remettreTout` ne le
+       rétablit pas, et le laisser ailleurs fausserait les contrôles suivants. */
+    const menuRetour = courantM().querySelector('.reglage-mode select');
+    menuRetour.value = menuRetour.options[0].value;
+    menuRetour.dispatchEvent(new w.Event('change'));
+    await attendre(100);
+    await remettreTout();
+    $('onglet-ope').click();
+    await attendre(250);
+    await remettreTout();
+}
+
+/* Un moyen de lever toutes les restrictions d'un coup : quatre figures
+   restreintes ne doivent pas demander quatre gestes. */
+const panneauGlobal = [...w.document.querySelectorAll('#figures .panneau')]
+    .find(p => p.querySelectorAll('.barre').length > 1);
+if (panneauGlobal) {
+    t('aucun bouton de levée sans restriction', $('tout-reafficher').hidden);
+    panneauGlobal.querySelector('.barre').dispatchEvent(new w.MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 150, clientY: 150 }));
+    await attendre(50);
+    [...(w.document.querySelector('.menu-contextuel')?.querySelectorAll('.menu-entree') || [])]
+        .find(e => /N’afficher que cette valeur/.test(e.textContent))?.click();
+    await attendre(100);
+    t('bouton de levée proposé', !$('tout-reafficher').hidden,
+      $('tout-reafficher').textContent);
+    t('il compte les figures restreintes',
+      /1 figure/.test($('tout-reafficher').textContent),
+      $('tout-reafficher').textContent);
+    $('tout-reafficher').click();
+    await attendre(100);
+    t('il lève toutes les restrictions',
+      !w.document.querySelector('#figures .note-restriction')
+      && $('tout-reafficher').hidden);
+}
+
+console.log(`  ${ok - avantRestr} vérifications passées`);
+
+console.log('\nCohérence du filtrage');
+const avantCoh = ok;
+
+const selectionCourante = () => {
+    const e = app.etat();
+    const parts = [];
+    Object.entries(e.facettes || {}).forEach(([k, v]) => {
+        if (v?.size) parts.push(k + ':' + [...v].sort().join(','));
+    });
+    return parts.sort().join('|');
+};
+
+const remettre = async () => {
+    if (!$('reinit').hidden) { $('reinit').click(); await attendre(60); }
+};
+
+/**
+ * Clique le premier élément d'une famille et constate que la sélection bouge.
+ * @param attendu  clé de champ que le filtre devrait porter, si connue
+ */
+const eprouver = async (nom, selecteur, attendu = null) => {
+    await remettre();
+    const cible = w.document.querySelector(selecteur);
+    if (!cible) { t(`${nom} : élément présent`, false, selecteur); return; }
+    const avantClic = selectionCourante();
+    cible.dispatchEvent(new w.MouseEvent('click', { bubbles: true, cancelable: true }));
+    await attendre(80);
+    const apresClic = selectionCourante();
+    t(`${nom} : le clic filtre`, apresClic !== avantClic,
+      { avant: avantClic || '(aucun)', apres: apresClic || '(aucun)' });
+    if (attendu && apresClic !== avantClic) {
+        t(`${nom} : filtre porté par « ${attendu} »`,
+          apresClic.startsWith(attendu + ':') || apresClic.includes('|' + attendu + ':'),
+          apresClic);
+    }
+    await remettre();
+};
+
+/* ── Tableau de bord des partenariats ── */
+$('onglet-ope').click();
+await attendre(250);
+await remettre();
+await ouvrirFacettes();
+
+await eprouver('facette', '.facette-liste input[type=checkbox]');
+await eprouver('barre d’une figure', '#figures .barre');
+await eprouver('colonne d’une figure', '#figures .colonne');
+await eprouver('segment empilé', '#figures .segment');
+await eprouver('étiquette d’axe', '#figures .etiquette-axe');
+await eprouver('ligne de partenaire', '#partenaires-hote tbody tr.tableau-ligne', 'partenaire');
+await eprouver('pastille de légende', '#figures .figure-legende-item');
+await eprouver('segment de frise', '#figures .frise-segment');
+
+/* Les trois vues des croisements, chacune avec ses éléments propres. */
+const ongletsCoh = [...w.document.querySelectorAll('.onglets-vue .onglet')];
+/* Le compte est vérifié plutôt que supposé : un sélecteur devenu faux
+   sauterait tout le bloc en silence, et le balayage ne prouverait plus rien
+   là où il paraîtrait passer. */
+t('les trois vues des croisements sont atteignables', ongletsCoh.length === 3,
+  ongletsCoh.length);
+if (ongletsCoh.length === 3) {
+    ongletsCoh[2].click(); await attendre(80);
+    await eprouver('cellule de matrice', '#relations-hote .matrice-cellule');
+    ongletsCoh[0].click(); await attendre(80);
+    await eprouver('entrée de la vue Liens', '#relations-hote .barre');
+    ongletsCoh[1].click(); await attendre(80);
+    await eprouver('bloc du flux', '#relations-hote .flux-noeud');
+    ongletsCoh[2].click(); await attendre(80);
+    await eprouver('en-tête de colonne', '#relations-hote th.matrice-tete.triable');
+    await eprouver('nom de ligne', '#relations-hote td.matrice-nom.triable');
+}
+
+/* Le contrôle des données propose de filtrer sur les valeurs qu'il signale :
+   c'est l'intérêt du panneau, retrouver les enregistrements en cause. */
+if (!w.document.querySelector('#qualite-hote .constat')) {
+    w.document.querySelector('#panneau-qualite button[aria-expanded]')?.click();
+    await attendre(80);
+}
+const actionQualite = w.document.querySelector('#qualite-hote .constat button.lien, #qualite-hote .variante');
+if (actionQualite) {
+    await remettre();
+    const avantQ = selectionCourante();
+    actionQualite.dispatchEvent(new w.MouseEvent('click', { bubbles: true }));
+    await attendre(80);
+    t('contrôle des données : l’action filtre',
+      selectionCourante() !== avantQ, selectionCourante());
+    await remettre();
+}
+
+/* Le tableau : une cellule dont la colonne correspond à un champ. */
+await remettre();
+const celluleChampCoh = [...w.document.querySelectorAll('#tableau-hote tbody tr.tableau-ligne td')]
+    .find(td => /^\d{4}$/.test(td.textContent.trim()));
+if (celluleChampCoh) {
+    const avantTab = selectionCourante();
+    /* Le clic d'une cellule déplie le détail ; c'est le menu qui filtre. */
+    celluleChampCoh.dispatchEvent(new w.MouseEvent('contextmenu',
+        { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+    await attendre(50);
+    const menuTab = w.document.querySelector('.menu-contextuel');
+    const entreeFiltre = [...(menuTab?.querySelectorAll('.menu-entree') || [])]
+        .find(e => /Ajouter au filtre|Ne garder que/.test(e.textContent));
+    t('tableau : menu de filtrage sur une cellule', !!entreeFiltre,
+      [...(menuTab?.querySelectorAll('.menu-entree') || [])].map(e => e.textContent));
+    entreeFiltre?.click();
+    await attendre(80);
+    t('tableau : le menu filtre', selectionCourante() !== avantTab,
+      selectionCourante());
+    await remettre();
+}
+
+/* L'atelier : ses deux champs sont libres, donc son filtrage doit suivre le
+   champ choisi et non un champ figé. */
+await remettre();
+if (!w.document.querySelector('#atelier-hote svg')) {
+    w.document.querySelector('#panneau-atelier button[aria-expanded]')?.click();
+    await attendre(80);
+}
+await eprouver('barre de l’atelier', '#atelier-hote .barre');
+
+/* Les disques temporels ne figurent dans aucun panneau : ils ne sont
+   atteignables que par l'atelier, et c'est donc là qu'il faut les éprouver.
+   Sans cela, une forme entière resterait hors du balayage. */
+/* Les bulles croisent deux champs : sans second champ, l'atelier retombe sur
+   les barres et le contrôle ne porterait pas sur ce qu'il annonce. */
+const menusAtelier = [...w.document.querySelectorAll('#atelier-hote select')];
+const menuChampB = menusAtelier.find(m =>
+    [...m.options].some(o => /aucun|—/i.test(o.textContent)));
+if (menuChampB) {
+    const second = [...menuChampB.options].find(o => o.value && !/aucun|—/i.test(o.textContent));
+    if (second) {
+        menuChampB.value = second.value;
+        menuChampB.dispatchEvent(new w.Event('change'));
+        await attendre(100);
+    }
+}
+const menuForme = [...w.document.querySelectorAll('#atelier-hote select')].find(m =>
+    [...m.options].some(o => /bulle/i.test(o.textContent)));
+t('forme « bulles » proposée dans l’atelier', !!menuForme,
+  menusAtelier.map(m => [...m.options].map(o => o.textContent).join('/')));
+if (menuForme) {
+    const optionBulles = [...menuForme.options].find(o => /bulle/i.test(o.textContent));
+    menuForme.value = optionBulles.value;
+    menuForme.dispatchEvent(new w.Event('change'));
+    await attendre(100);
+    await eprouver('disque temporel', '#atelier-hote .bulle');
+    const menuRetour = [...w.document.querySelectorAll('#atelier-hote select')]
+        .find(m => [...m.options].some(o => /bulle/i.test(o.textContent)));
+    if (menuRetour) {
+        const optionBarres = [...menuRetour.options].find(o => /barre/i.test(o.textContent));
+        menuRetour.value = optionBarres.value;
+        menuRetour.dispatchEvent(new w.Event('change'));
+        await attendre(80);
+    }
+}
+
+/* ── Tableau de bord des chercheurs ── */
+$('onglet-ec').click();
+await attendre(250);
+await remettre();
+await ouvrirFacettes();
+
+await eprouver('facette (chercheurs)', '.facette-liste input[type=checkbox]');
+await eprouver('barre (chercheurs)', '#figures .barre');
+await eprouver('segment empilé (chercheurs)', '#figures .segment-empile');
+await eprouver('mot-clé du nuage', '#figures .mot', 'motcle');
+await eprouver('pôle du réseau', '#reseau-hote .constellation-pole');
+
+$('onglet-ope').click();
+await attendre(200);
+await remettre();
+
+console.log(`  ${ok - avantCoh} vérifications passées`);
+
+console.log('\nIncidents pendant le parcours');
+t('aucune erreur levée pendant tout le parcours',
+  incidents.length === 0, incidents.slice(0, 6));
+console.log(`  1 vérification passée`);
 
 console.log(`\n${ok} passées, ${ko} échouées\n`);
 process.exit(ko ? 1 : 0);

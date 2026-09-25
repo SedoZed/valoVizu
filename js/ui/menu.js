@@ -102,11 +102,31 @@ export function fermerMenu() { fermer(); }
  * Attache le menu à un élément portant une valeur.
  * @param options { titre, entrees(valeur) }
  */
-export function attacherMenu(element, titre, construireEntrees) {
+export function attacherMenu(element, titre, construireEntrees, { auClic = false } = {}) {
+    const ouvrir = (x, y) => afficherMenu(x, y, titre, construireEntrees());
+
     element.addEventListener('contextmenu', e => {
         if (e.shiftKey) return;        // laisse le menu du navigateur
         e.preventDefault();
         e.stopPropagation();
-        afficherMenu(e.clientX, e.clientY, titre, construireEntrees());
+        ouvrir(e.clientX, e.clientY);
+    });
+
+    if (!auClic) return;
+    /* Sur une figure de montants, un point ne désigne pas une valeur à
+       filtrer mais une opération : le clic gauche n'a rien d'autre à faire
+       qu'ouvrir ce même menu. Le réserver au clic droit le rendrait
+       introuvable là où c'est la seule action offerte. */
+    element.addEventListener('click', e => {
+        e.stopPropagation();
+        ouvrir(e.clientX, e.clientY);
+    });
+    element.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        /* Au clavier, il n'y a pas de position de pointeur : le menu s'ouvre
+           sur l'élément lui-même. */
+        const r = element.getBoundingClientRect?.() || { left: 0, top: 0, width: 0, height: 0 };
+        ouvrir(r.left + r.width / 2, r.top + r.height / 2);
     });
 }

@@ -31,6 +31,15 @@
  * partenaire qu'on venait pourtant de mettre hors périmètre.
  */
 
+/* Barème des montants. Fixe, et non calculé sur la sélection : des tranches
+   qui bougeraient avec les filtres interdiraient toute comparaison d'une vue
+   à l'autre. Il décrit un champ, d'où sa place ici plutôt qu'avec le
+   chargement. */
+export const TRANCHES_MONTANT = [
+    'Moins de 5 k€', 'De 5 à 10 k€', 'De 10 à 25 k€', 'De 25 à 50 k€',
+    'De 50 à 100 k€', 'De 100 à 250 k€', 'Plus de 250 k€',
+];
+
 const SANS = {
     labo:       'Laboratoire non renseigné',
     statut:     'Statut non renseigné',
@@ -43,6 +52,8 @@ const SANS = {
     partenaire: 'Partenaire non renseigné',
     type:       'Type non renseigné',
     contrat:    'Type de contrat non renseigné',
+    budget:     'Budget non renseigné',
+    montant:    'Montant global non renseigné',
     naf:        'Code NAF non renseigné',
     ec:         'Aucun EC associé',
 };
@@ -94,6 +105,29 @@ export const CHAMPS = {
           nature: 'nominal', multiple: false, absent: SANS.contrat,
           valeurs: r => ouSans([r.typeContrat], SANS.contrat) },
 
+        /* Les tranches de montant servent à sélectionner, non à décrire.
+           Elles ont d'abord servi aux deux : le panneau des montants les
+           comptait comme un champ nominal ordinaire. La lecture était fausse
+           par construction — une distribution de montants étant très
+           dissymétrique, les premières tranches absorbaient l'essentiel des
+           opérations et les contrats exceptionnels disparaissaient dans la
+           dernière. Les figures travaillent désormais sur les montants eux-
+           mêmes ; les tranches restent ici parce que « les contrats de plus
+           de 100 k€ » est un filtre que l'on veut poser d'un clic, et qu'un
+           seuil arbitraire est sans conséquence quand il ne sert qu'à
+           découper une sélection. */
+        { cle: 'budget',  libelle: 'Budget de l’opération',
+          pluriel: 'tous budgets',
+          nature: 'nominal', multiple: false, absent: SANS.budget,
+          ordre: [...TRANCHES_MONTANT, SANS.budget],
+          valeurs: r => ouSans([r.budgetTranche], SANS.budget) },
+
+        { cle: 'montant', libelle: 'Montant global (TTC)',
+          pluriel: 'tous montants',
+          nature: 'nominal', multiple: false, absent: SANS.montant,
+          ordre: [...TRANCHES_MONTANT, SANS.montant],
+          valeurs: r => ouSans([r.montantTranche], SANS.montant) },
+
         { cle: 'duree',   libelle: 'Durée',           pluriel: 'toutes durées',
           nature: 'nominal', multiple: false, absent: SANS.duree,
           /* Tranches calculées au chargement à partir des dates de début et
@@ -116,7 +150,8 @@ export const CHAMPS = {
         /* Le code NAF qualifie l'activité du partenaire, pas l'opération.
            Son libellé le dit, faute de quoi on cherche en vain le rapport
            entre un contrat et un code d'activité économique. */
-        { cle: 'naf',     libelle: 'Activité du partenaire', pluriel: 'toutes activités de partenaires',
+        { cle: 'naf',     libelle: 'Domaine d’activité du partenaire',
+          pluriel: 'tous domaines d’activité',
           nature: 'nominal', multiple: true, absent: SANS.naf,
           entite: 'partenaires', identite: p => p.nom, extrait: p => p.naf,
           valeurs: r => ouSans(r.partenaires.map(p => p.naf), SANS.naf) },
@@ -137,7 +172,7 @@ export const CHAMPS = {
     valeurs distinctes, que la recherche libre sert bien mieux qu'une liste. */
 export const FACETTES = {
     ec:  ['labo', 'statut', 'domaine', 'cnu'],
-    ope: ['annee', 'contrat', 'duree', 'type', 'partenaire', 'labo', 'naf'],
+    ope: ['annee', 'contrat', 'budget', 'montant', 'duree', 'type', 'partenaire', 'labo', 'naf'],
 };
 
 export const UNITE = {
@@ -147,7 +182,7 @@ export const UNITE = {
 
 export const TITRES = {
     ec:  'Enseignants-chercheurs',
-    ope: 'Opérations de partenariat',
+    ope: 'Partenariats',
 };
 
 export function champ(source, cle) {
@@ -203,4 +238,33 @@ export function masquagesParDefaut(records, source) {
         });
     });
     return [...trouvees];
+}
+
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Renvois vers les fiches Omeka S
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Identifiant Omeka S de la valeur d'un champ, lorsqu'elle provient d'un
+ * item lié.
+ *
+ * Les champs dérivés — une année, une tranche de durée — n'ont pas de fiche :
+ * ils sont calculés, non saisis. La fonction renvoie alors null, et le renvoi
+ * n'est pas proposé plutôt que de mener à une page inexistante.
+ */
+export function identifiantOmeka(records, source, cle, valeur) {
+    if (source !== 'ope') return null;
+
+    for (const rec of records) {
+        if (cle === 'contrat' && rec.typeContrat === valeur) return rec.typeContratId;
+        if (cle === 'partenaire' || cle === 'type' || cle === 'naf') {
+            for (const p of rec.partenaires || []) {
+                if (cle === 'partenaire' && p.nom === valeur) return p.id;
+                if (cle === 'type' && p.type === valeur) return p.typeId;
+                if (cle === 'naf'  && p.naf  === valeur) return p.nafId;
+            }
+        }
+    }
+    return null;
 }

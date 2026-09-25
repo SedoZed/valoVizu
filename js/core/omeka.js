@@ -1,3 +1,5 @@
+import { TRANCHES_MONTANT } from './champs.js';
+
 /**
  * core/omeka.js
  * Chargement depuis l'API Omeka S et normalisation en enregistrements plats.
@@ -28,6 +30,23 @@ const DEFAUTS = { ...CONFIG };
 
 /** Une adresse d'API doit être absolue : une adresse relative ferait porter
     les requêtes sur le serveur qui héberge la page, pas sur Omeka S. */
+/**
+ * Adresse de la fiche d'un item dans l'interface d'administration.
+ *
+ * L'`@id` que renvoie l'API désigne la ressource JSON, non une page lisible :
+ * le lien « ouvrir la fiche » y menait jusqu'ici à du texte brut. La fiche
+ * d'administration se déduit de la racine de l'instance, elle-même obtenue en
+ * retirant le segment `/api` de l'adresse configurée.
+ *
+ * Elle exige d'être connecté à Omeka S — c'est aussi ce qui en fait la bonne
+ * cible : on y consulte et on y corrige.
+ */
+export function ficheAdmin(id) {
+    if (!id || !CONFIG.api) return '';
+    const racine = CONFIG.api.replace(/\/+$/, '').replace(/\/api$/, '');
+    return `${racine}/admin/item/${id}`;
+}
+
 export function adresseValide(url) {
     try {
         const u = new URL(String(url || '').trim());
@@ -85,7 +104,7 @@ const DUREE_CACHE = 6 * 60 * 60 * 1000;   // 6 heures
  * des enregistrements produits par la version précédente du code. On croit
  * alors le correctif inopérant, et on cherche l'erreur là où elle n'est pas.
  */
-const VERSION_FORMAT = 5;
+const VERSION_FORMAT = 7;
 
 function lireCache(cle) {
     try {
@@ -381,6 +400,98 @@ function moisDepuisJours(jours) {
     return jours === null ? null : Math.round((jours / 30.44) * 10) / 10;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Montants
+───────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Lit un montant saisi à la main.
+ *
+ * La base ne contient que des nombres, mais sous des formes variées :
+ * « 123 », « 123,45 », et sans doute « 1 234,56 » ou « 5000 € » là où
+ * quelqu'un aura ajouté l'unité. Les séparateurs français et anglo-saxons se
+ * contredisent — « 1.234 » vaut mille deux cent trente-quatre ici, un et des
+ * poussières ailleurs — d'où les règles explicites ci-dessous.
+ *
+ * Une valeur illisible renvoie `null`, jamais zéro : un zéro se fondrait dans
+ * les sommes et les tirerait vers le bas sans que rien ne le signale, alors
+ * qu'une absence se compte et s'affiche.
+ */
+export function analyserMontant(brut) {
+    if (brut === null || brut === undefined) return null;
+    let texte = String(brut).trim();
+    if (!texte) return null;
+
+    /* Unité, mention de régime fiscal, espaces de toute sorte : ce qui
+       entoure le nombre sans en faire partie. */
+    texte = texte
+        /* Les mentions se retirent avant les espaces : une fois ceux-ci
+           supprimés, « 12000TTC » n'offre plus de frontière de mot et la
+           mention resterait collée au nombre. */
+        .replace(/€|EUR|euros?/gi, ' ')
+        .replace(/\b(TTC|HT|HTVA)\b/gi, ' ')
+        .replace(/[\u00A0\u202F\s]/g, '')
+        .trim();
+    if (!texte) return null;
+
+    const virgule = texte.lastIndexOf(',');
+    const point   = texte.lastIndexOf('.');
+
+    if (virgule >= 0 && point >= 0) {
+        /* Les deux présents : le dernier est le séparateur décimal, l'autre
+           sépare les milliers. */
+        const decimal = Math.max(virgule, point);
+        texte = texte.slice(0, decimal).replace(/[.,]/g, '')
+              + '.' + texte.slice(decimal + 1);
+    } else if (virgule >= 0) {
+        /* Une virgule seule est décimale en français, sauf si elle découpe
+           des groupes de trois chiffres — « 1,234,567 ». */
+        texte = /^\d{1,3}(,\d{3})+$/.test(texte)
+            ? texte.replace(/,/g, '')
+            : texte.replace(',', '.');
+    } else if (point >= 0) {
+        /* Un point seul est ambigu : « 1.234 » se lit mille deux cent
+           trente-quatre dans une saisie française. On ne le tient pour
+           décimal que s'il ne découpe pas des groupes de trois chiffres. */
+        if (/^\d{1,3}(\.\d{3})+$/.test(texte)) texte = texte.replace(/\./g, '');
+    }
+
+    if (!/^-?\d*\.?\d+$/.test(texte)) return null;
+    const valeur = Number(texte);
+    /* Un montant négatif ou démesuré trahit une saisie fautive plutôt qu'un
+       contrat : mieux vaut le compter absent que fausser une somme. */
+    if (!Number.isFinite(valeur) || valeur < 0 || valeur > 1e11) return null;
+    return valeur;
+}
+
+/**
+ * Tranche de montant, pour le filtrage et les graphiques.
+ * Le barème est fixe, et non calculé sur la sélection : des tranches qui
+ * bougeraient avec les filtres interdiraient toute comparaison d'une vue à
+ * l'autre.
+ */
+export function trancheMontant(montant, absent) {
+    if (montant === null || montant === undefined) return absent;
+    if (montant < 5000)   return TRANCHES_MONTANT[0];
+    if (montant < 10000)  return TRANCHES_MONTANT[1];
+    if (montant < 25000)  return TRANCHES_MONTANT[2];
+    if (montant < 50000)  return TRANCHES_MONTANT[3];
+    if (montant < 100000) return TRANCHES_MONTANT[4];
+    if (montant < 250000) return TRANCHES_MONTANT[5];
+    return TRANCHES_MONTANT[6];
+}
+
+/** Montant lisible : les ordres de grandeur priment sur les centimes. */
+export function formaterMontant(montant) {
+    if (montant === null || montant === undefined) return '—';
+    if (montant >= 1e6) {
+        return `${(montant / 1e6).toFixed(montant >= 1e7 ? 0 : 1)
+                    .replace('.', ',')} M€`;
+    }
+    if (montant >= 1e4) return `${Math.round(montant / 1000)} k€`;
+    return `${Math.round(montant).toLocaleString('fr-FR')} €`;
+}
+
 /** Tranche de durée, pour le filtrage et les graphiques. */
 export function trancheDuree(mois) {
     if (mois === null || mois === undefined) return 'Durée non renseignée';
@@ -396,7 +507,7 @@ function normaliserOpe(brut, partenaires, libelles = {}) {
         const listePartenaires = liens(item, 'valo:opeCollabExterne').map(l =>
             partenaires[l.id] || {
                 id: l.id, nom: l.titre || `Partenaire ${l.id}`,
-                naf: '', type: '', url: '',
+                naf: '', type: '', url: '', nafId: null, typeId: null,
             });
 
         const titre = valeur(item, 'dcterms:title') || item['o:title'] || `OPE ${item['o:id']}`;
@@ -414,7 +525,17 @@ function normaliserOpe(brut, partenaires, libelles = {}) {
         /* Type de contrat : item lié le plus souvent, mais parfois saisi en
            clair. Les deux formes sont lues, comme pour le statut d'un
            chercheur — n'en lire qu'une vide le champ sans le signaler. */
+        const bruBudget  = premiereDe(item, ['valo:budgOPE'])
+                        || chercherPropriete(item, ['budgope', 'budget'])?.valeur || '';
+        const bruMontant = premiereDe(item, ['valo:montantGlobal'])
+                        || chercherPropriete(item, ['montantglobal', 'montant'])?.valeur || '';
+        const budget  = analyserMontant(bruBudget);
+        const montant = analyserMontant(bruMontant);
+
         const lienType = liens(item, 'valo:opeType')[0];
+        /* L'identifiant de l'item lié est conservé, non seulement son
+           libellé : sans lui, aucun renvoi vers sa fiche n'est possible. */
+        const typeContratId = lienType?.id || null;
         const typeContrat = lienType
             ? (libelles[lienType.id]?.libelle || lienType.titre || '')
             : (premiereDe(item, ['valo:opeType'])
@@ -428,6 +549,7 @@ function normaliserOpe(brut, partenaires, libelles = {}) {
             kind:  'ope',
             titre,
             typeContrat,
+            typeContratId,
             annee: anneeOperation(debut, dateGenerique, titre),
             /* Origine de l'année : sert au panneau de contrôle des données,
                pour distinguer ce qui est saisi de ce qui est déduit. */
@@ -441,6 +563,22 @@ function normaliserOpe(brut, partenaires, libelles = {}) {
             dureeJours: jours,
             dureeMois: mois,
             duree: trancheDuree(mois),
+
+            /* Deux montants de natures différentes : la part revenant à
+               l'établissement, et le montant total de l'opération tous
+               partenaires confondus. Leur écart est lui-même une information,
+               d'où le maintien des deux plutôt qu'un seul.
+               Le texte d'origine est conservé quand il n'a pas pu être lu :
+               le contrôle des données le signale, au lieu de laisser une
+               absence inexpliquée. */
+            budget: budget,
+            budgetTranche: trancheMontant(budget, 'Budget non renseigné'),
+            budgetBrut: budget === null ? (bruBudget || '') : '',
+            montant: montant,
+            montantTranche: trancheMontant(montant, 'Montant global non renseigné'),
+            montantBrut: montant === null ? (bruMontant || '') : '',
+            budgetTexte:  budget  === null ? '' : formaterMontant(budget),
+            montantTexte: montant === null ? '' : formaterMontant(montant),
             partenaires: listePartenaires,
             labos: liens(item, 'valo:opeCollabLabo').map(l => l.titre || String(l.id)),
             ecs:   liens(item, 'valo:ecImplique').map(l => l.titre || String(l.id)),
@@ -484,6 +622,10 @@ export async function chargerOpe(progres) {
                 nom:  p['o:title'] || `Partenaire ${p['o:id']}`,
                 naf:  lienNaf  ? (libelles[lienNaf.id]?.libelle  || lienNaf.titre  || '') : '',
                 type: lienType ? (libelles[lienType.id]?.libelle || lienType.titre || '') : '',
+                /* Les identifiants des items liés sont conservés : sans eux,
+                   aucun renvoi vers leur fiche n'est possible. */
+                nafId:  lienNaf?.id  || null,
+                typeId: lienType?.id || null,
                 url:  p['@id'] || '',
             };
         });

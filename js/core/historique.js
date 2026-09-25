@@ -27,10 +27,13 @@ function copier(etat) {
     Object.entries(etat.facettes || {}).forEach(([k, v]) => { facettes[k] = new Set(v); });
     const epinglees = {};
     Object.entries(etat.epinglees || {}).forEach(([k, v]) => { epinglees[k] = new Set(v); });
+    const restrictions = {};
+    Object.entries(etat.restrictions || {}).forEach(([k, v]) => { restrictions[k] = new Set(v); });
     return {
         facettes,
         masquees: new Set(etat.masquees || []),
         epinglees,
+        restrictions,
         recherche: etat.recherche || '',
     };
 }
@@ -45,8 +48,12 @@ function empreinte(etat) {
         .filter(([, v]) => v && v.size)
         .map(([k, v]) => k + ':' + [...v].sort().join('\u0001'))
         .sort().join('\u0002');
+    const restrictions = Object.entries(etat.restrictions || {})
+        .filter(([, v]) => v && v.size)
+        .map(([k, v]) => k + ':' + [...v].sort().join('\u0001'))
+        .sort().join('\u0002');
     return [facettes, [...(etat.masquees || [])].sort().join('\u0001'),
-            epinglees, etat.recherche || ''].join('\u0003');
+            epinglees, restrictions, etat.recherche || ''].join('\u0003');
 }
 
 /**
@@ -70,6 +77,12 @@ function decrire(avant, apres, libelleChamp) {
         const a = avant.epinglees?.[cle]?.size || 0;
         const b = apres.epinglees?.[cle]?.size || 0;
         if (a !== b) return `un détachement — ${nom(cle)}`;
+    }
+    for (const id of new Set([...Object.keys(avant.restrictions || {}),
+                             ...Object.keys(apres.restrictions || {})])) {
+        const a = avant.restrictions?.[id]?.size || 0;
+        const b = apres.restrictions?.[id]?.size || 0;
+        if (a !== b) return b > a ? 'une restriction d’affichage' : 'un retour à l’affichage complet';
     }
     if ((avant.recherche || '') !== (apres.recherche || '')) return 'la recherche';
     return 'le dernier changement';

@@ -91,6 +91,18 @@ export function texteLegende(rows, source, etat, reglages) {
         parts.push('aucun filtre');
     }
 
+    /* Les restrictions d'affichage viennent après « aucun filtre », et ne
+       l'empêchent pas : elles n'écartent aucun enregistrement. La mention
+       reste volontairement sommaire — dire ici quelle figure montre quoi
+       laisserait croire que les effectifs annoncés en dépendent. Chaque
+       figure porte le détail de la sienne. */
+    const restreintes = Object.values(etat.restrictions || {})
+        .filter(v => v?.size).length;
+    if (restreintes) {
+        parts.push(`${restreintes} figure${restreintes > 1 ? 's' : ''} `
+                 + `à affichage restreint`);
+    }
+
     return parts.join(' · ');
 }
 

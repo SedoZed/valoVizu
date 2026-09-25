@@ -207,6 +207,32 @@ const domaines = [...sources.matchAll(/https?:\/\/([\w.-]+)/g)]
     .filter(d => !/^(exemple\.|localhost|fonts\.|www\.w3\.org|cdnjs\.)/.test(d));
 t('aucune instance réelle citée dans le code', domaines.length === 0, [...new Set(domaines)]);
 
+/* ── 8. Charte graphique de l'établissement ────────────────────────────
+   La charte impose le respect des contrastes d'accessibilité et réserve le
+   soulignement aux liens hypertextes. Les couleurs du logotype primaire sont
+   celles du document officiel. */
+const CHARTE = { Poppy: '#E30F1B', Raspberry: '#AE164E',
+                 Purple: '#7B206B', Maroon: '#75151F' };
+
+t('la couleur de signal vient de la charte',
+  valeurVar(':root', 'signal')?.toUpperCase() === CHARTE.Raspberry,
+  valeurVar(':root', 'signal'));
+t('la couleur d’avertissement vient de la charte',
+  valeurVar(':root', 'alerte')?.toUpperCase() === CHARTE.Poppy,
+  valeurVar(':root', 'alerte'));
+t('les teintes de la charte figurent dans la palette des figures',
+  [CHARTE.Poppy, CHARTE.Raspberry].every(c => graphique.toUpperCase().includes(c)));
+t('la typographie de l’identité est employée',
+  /--titre:\s*"Poppins"/.test(css) && /--corps:\s*"Poppins"/.test(css));
+t('Poppins est chargée', /family=Poppins/.test(html));
+
+/* Le soulignement est réservé aux liens : aucun autre élément ne doit en
+   porter. Les liens de l'outil sont des boutons de classe « lien ». */
+const soulignes = [...css.matchAll(/([^{}]+)\{([^}]*text-decoration\s*:\s*underline[^}]*)\}/g)]
+    .map(m => m[1].trim().replace(/\s+/g, ' '))
+    .filter(sel => !/\.lien|\.mot|a[:.\s]|\ba\b/.test(sel));
+t('soulignement réservé aux liens', soulignes.length === 0, soulignes);
+
 console.log(`  ${ok} vérifications passées`);
 console.log(`\n${ok} passées, ${ko} échouées\n`);
 process.exit(ko ? 1 : 0);

@@ -58,12 +58,22 @@ export function couleurDe(valeur, palette) {
     return teintes[Math.abs(h) % teintes.length];
 }
 
+/* Palette des séries.
+   Elle s'ouvre sur les teintes de la charte — Poppy, Raspberry, un Purple
+   éclairci — puis s'élargit à d'autres tons pour la seule raison qui vaille
+   ici : distinguer. Cinq couleurs institutionnelles ne peuvent pas séparer
+   trente-cinq laboratoires, et un camaïeu de rouges rendrait les figures
+   illisibles. La charte porte l'identité de l'interface ; la lecture des
+   données impose ses propres contraintes, que la charte reconnaît d'ailleurs
+   en exigeant le respect des contrastes.
+   Purple institutionnel (#7B206B) n'atteint que 1,7 de contraste sur fond
+   sombre : il est éclairci à #9F298B, qui conserve son ton. */
 export const PALETTE_SERIES = [
-    '#1F8A76', '#C4622D', '#4C7BB5', '#B08A2E', '#8B6BA8',
-    '#2E9E8F', '#A8664A', '#5E8FD0', '#C79A3C', '#7D77B8',
-    '#3E9E5B', '#C0506B', '#3D8FA8', '#9A7B3A', '#6E8BC4',
-    '#57A06C', '#B4566B', '#4E9FB0', '#8E7BA0', '#C1793F',
-    '#2F8DA0', '#A15C8C', '#77A046', '#5B7FA8',
+    '#AE164E', '#1F8A76', '#E30F1B', '#4C7BB5', '#B08A2E',
+    '#9F298B', '#2E9E8F', '#C4622D', '#5E8FD0', '#7D77B8',
+    '#C0506B', '#3E9E5B', '#A8664A', '#3D8FA8', '#C79A3C',
+    '#B4566B', '#57A06C', '#6E8BC4', '#9A7B3A', '#4E9FB0',
+    '#C1793F', '#8E7BA0', '#77A046', '#A15C8C',
 ];
 
 /**
@@ -820,6 +830,22 @@ export function bullesTemporelles(options) {
                 }), evt.clientX, evt.clientY);
             });
             disque.addEventListener('mouseleave', cacherInfobulle);
+
+            /* Le disque agit, comme les barres et les colonnes.
+               Les rappels étaient reçus mais jamais branchés : la figure
+               était la seule de l'outil où désigner une valeur ne faisait
+               rien, sans que rien ne le laisse voir. */
+            if (onClic && !horsEchelle(ent.valeur, ent)) {
+                disque.style.cursor = 'pointer';
+                disque.setAttribute('tabindex', '0');
+                disque.setAttribute('role', 'button');
+                const agir = () => onClic(ent.valeur);
+                disque.addEventListener('click', agir);
+                disque.addEventListener('keydown', e => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); agir(); }
+                });
+                onMenu?.(disque, ent.valeur);
+            }
             svg.appendChild(disque);
 
             /* L'effectif n'est inscrit que dans les disques assez grands ;
@@ -1407,3 +1433,14 @@ export function nuageMots(options) {
     svg._horsCadre = horsCadre;
     return svg;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Primitives partagées
+
+   Les figures de montants vivent dans un module voisin — elles ne comptent
+   pas des effectifs mais portent une valeur continue, et leur logique n'a
+   rien à faire ici. Elles ont en revanche besoin des mêmes briques, qu'il
+   vaut mieux exporter que recopier : une figure dont les marges, les teintes
+   ou la troncature des libellés divergeraient se verrait aussitôt.
+───────────────────────────────────────────────────────────────────────── */
+export { el, texte, decrire, ajuster, couleur as couleurTheme };
