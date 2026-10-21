@@ -1,19 +1,50 @@
 /**
  * ui/outils.js
- * Menu de redirection vers d'autres outils.
+ * Menu de navigation entre les outils de l'écosystème.
  *
- * Les liens sont réglés par l'utilisateur et conservés dans le navigateur,
- * non inscrits dans le code. Une liste codée en dur désignerait des adresses
- * internes dans un dépôt publié, et imposerait de modifier le code pour
- * ajouter un outil — les deux défauts qu'on vient d'écarter pour l'adresse
- * de l'API.
+ * Les liens sont écrits ici, et non réglés par chacun
+ * ---------------------------------------------------
+ * Ils ont d'abord été des préférences, conservées dans le navigateur. Le motif
+ * tenait : une liste en dur désignerait des adresses internes dans un dépôt
+ * publié, et imposerait de toucher au code pour ajouter un outil — les deux
+ * défauts qu'on venait d'écarter pour l'adresse de l'API.
  *
- * Une entrée est déduite, non réglée : l'instance Omeka S elle-même, dont
- * l'adresse se tire de celle de l'API. La proposer d'office évite à chacun
- * de la saisir alors qu'elle est déjà connue.
+ * Il tombe pour une raison plus forte : une préférence vit **par poste**. Un
+ * collègue qui ouvrait l'outil ne voyait aucun lien, et l'écosystème n'existait
+ * que pour celui qui l'avait configuré. Or c'est précisément ce que ce menu
+ * doit montrer : que ces applications forment un ensemble.
+ *
+ * Le motif d'origine est désamorcé par la forme des liens, non par leur place :
+ * ils sont **relatifs**. Rien d'interne ne part dans le dépôt publié, et la
+ * suite fonctionne où qu'elle soit déployée, pourvu que les dossiers restent
+ * voisins. Une adresse absolue réintroduirait le défaut ; il n'y en a pas ici.
+ *
+ * Une entrée reste déduite plutôt qu'écrite : l'instance Omeka S, dont
+ * l'adresse se tire de celle de l'API. Elle change d'un déploiement à l'autre,
+ * elle n'a donc rien à faire dans une liste fixe.
  */
-import { preferences, enregistrerPreferences } from '../core/preferences.js';
 import { CONFIG } from '../core/omeka.js';
+import { poserFlottant } from './menu.js';
+
+/**
+ * Les outils de l'écosystème, dans l'ordre où le menu les présente.
+ *
+ * C'est la seule liste à tenir à jour. Les chemins sont relatifs à ce dossier
+ * et supposent les applications voisines sur le serveur :
+ *
+ *     .../valo/            ← cet outil
+ *     .../validExpertises/
+ *     .../validKeyword/
+ *
+ * `courant: true` marque l'application servie par ce dossier : elle figure
+ * dans la liste — sans quoi le menu dirait mal où l'on se trouve — mais ne
+ * renvoie nulle part.
+ */
+export const OUTILS = [
+    { nom: 'ValoVizu', aide: 'vous êtes ici', courant: true },
+    { nom: 'validExpertises', chemin: '../validExpertises/index.html' },
+    { nom: 'cleanKeywords', chemin: '../validKeyword/index.html' },
+];
 
 /** Racine de l'instance, déduite de l'adresse de l'API. */
 export function racineOmeka() {
@@ -21,37 +52,19 @@ export function racineOmeka() {
     return CONFIG.api.replace(/\/+$/, '').replace(/\/api$/, '');
 }
 
-/** Liens proposés : l'instance déduite, puis ceux qu'a réglés l'utilisateur. */
+/**
+ * Liens proposés : les outils de la suite, puis l'instance Omeka S.
+ *
+ * L'instance vient en dernier et détachée : ce n'est pas un outil de la suite
+ * mais la base qu'ils interrogent tous.
+ */
 export function liensOutils() {
-    const liens = [];
+    const liens = OUTILS.map(o => ({ ...o, url: o.courant ? '' : o.chemin }));
     const racine = racineOmeka();
     if (racine) {
-        liens.push({ nom: 'Omeka S', url: racine, deduit: true });
+        liens.push({ nom: 'Omeka S', url: racine, aide: 'instance', deduit: true });
     }
-    (preferences.outils || []).forEach(o => {
-        if (o?.nom && o?.url) liens.push({ ...o, deduit: false });
-    });
     return liens;
-}
-
-export function ajouterOutil(nom, url) {
-    const outils = [...(preferences.outils || []), { nom: String(nom).trim(), url: String(url).trim() }];
-    enregistrerPreferences({ outils });
-    return outils;
-}
-
-export function retirerOutil(indice) {
-    const outils = (preferences.outils || []).filter((_, i) => i !== indice);
-    enregistrerPreferences({ outils });
-    return outils;
-}
-
-/** Une adresse d'outil doit être absolue : une relative viserait cette page. */
-export function adresseOutilValide(url) {
-    try {
-        const u = new URL(String(url || '').trim());
-        return u.protocol === 'http:' || u.protocol === 'https:';
-    } catch { return false; }
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -66,6 +79,8 @@ function fermer() {
     ouvert.bouton.setAttribute('aria-expanded', 'false');
     ouvert = null;
     document.removeEventListener('keydown', surTouche, true);
+    window.removeEventListener('scroll', fermer, true);
+    window.removeEventListener('resize', fermer);
 }
 
 function surTouche(e) {
@@ -80,11 +95,8 @@ if (typeof document !== 'undefined') {
 
 export function fermerOutils() { fermer(); }
 
-/**
- * Branche le bouton d'ouverture.
- * @param onConfigurer  appelé pour ouvrir l'écran de réglage des liens
- */
-export function brancherOutils(bouton, onConfigurer = null) {
+/** Branche le bouton d'ouverture. */
+export function brancherOutils(bouton) {
     if (!bouton) return;
     bouton.addEventListener('click', e => {
         e.stopPropagation();
@@ -94,50 +106,66 @@ export function brancherOutils(bouton, onConfigurer = null) {
         panneau.className = 'outils-panneau';
         panneau.setAttribute('role', 'menu');
 
-        const liens = liensOutils();
-        if (!liens.length) {
-            const vide = document.createElement('p');
-            vide.className = 'note';
-            vide.textContent = 'Aucun outil enregistré.';
-            panneau.appendChild(vide);
-        }
+        liensOutils().forEach((lien, i) => {
+            /* L'instance est séparée des outils : elle n'appartient pas à la
+               suite, elle est ce que la suite interroge. */
+            if (lien.deduit && i > 0) {
+                const trait = document.createElement('div');
+                trait.className = 'menu-separateur';
+                panneau.appendChild(trait);
+            }
 
-        liens.forEach(lien => {
-            const a = document.createElement('a');
-            a.className = 'outils-lien';
-            a.href = lien.url;
-            a.target = '_blank';
-            a.rel = 'noopener';
-            a.setAttribute('role', 'menuitem');
+            /* L'application courante n'est pas un lien : un renvoi vers la
+               page où l'on se trouve déjà n'a rien à offrir. */
+            const entree = document.createElement(lien.courant ? 'div' : 'a');
+            entree.className = 'outils-lien' + (lien.courant ? ' outils-lien--courant' : '');
+            entree.setAttribute('role', 'menuitem');
+            if (!lien.courant) {
+                entree.href = lien.url;
+                /* Les outils de la suite s'ouvrent à la place de celui-ci :
+                   ce sont des pages voisines, pas des références extérieures.
+                   L'instance Omeka S, elle, part dans un nouvel onglet — on y
+                   va pour vérifier une fiche, pas pour quitter l'outil. */
+                if (lien.deduit) {
+                    entree.target = '_blank';
+                    entree.rel = 'noopener';
+                }
+                entree.title = lien.url;
+            } else {
+                entree.setAttribute('aria-current', 'page');
+            }
+
             const nom = document.createElement('span');
             nom.textContent = lien.nom;
-            a.appendChild(nom);
-            if (lien.deduit) {
+            entree.appendChild(nom);
+            if (lien.aide) {
                 const note = document.createElement('span');
                 note.className = 'outils-note';
-                note.textContent = 'instance';
-                a.appendChild(note);
+                note.textContent = lien.aide;
+                entree.appendChild(note);
             }
-            a.title = lien.url;
-            panneau.appendChild(a);
+            panneau.appendChild(entree);
         });
 
-        if (onConfigurer) {
-            const separateur = document.createElement('div');
-            separateur.className = 'menu-separateur';
-            panneau.appendChild(separateur);
-            const regler = document.createElement('button');
-            regler.type = 'button';
-            regler.className = 'outils-lien outils-regler';
-            regler.textContent = 'Gérer les liens…';
-            regler.addEventListener('click', () => { fermer(); onConfigurer(); });
-            panneau.appendChild(regler);
-        }
-
-        bouton.parentElement.appendChild(panneau);
+        /* Le panneau vit dans le `body`, et non sous le bouton.
+           Posé dans le bandeau, il héritait de son `overflow: hidden` : on
+           n'en voyait que la première entrée, et la mise au point du premier
+           lien — situé hors de la boîte écrêtée — faisait défiler le bandeau,
+           qui paraissait sauter de vingt pixels. Un élément flottant ne doit
+           rien devoir à la boîte qui le déclenche. C'est la règle que suit
+           déjà le menu contextuel, et `poserFlottant` la porte pour les deux. */
+        const ancre = bouton.getBoundingClientRect();
+        poserFlottant(panneau, ancre.left, ancre.bottom + 6);
         bouton.setAttribute('aria-expanded', 'true');
         ouvert = { panneau, bouton };
         document.addEventListener('keydown', surTouche, true);
-        panneau.querySelector('a, button')?.focus();
+        /* Posé en coordonnées de fenêtre, le panneau ne suit pas la page :
+           un défilement ou un redimensionnement le laisserait en arrière du
+           bouton. Il se referme plutôt que de flotter sans attache. */
+        window.addEventListener('scroll', fermer, true);
+        window.addEventListener('resize', fermer);
+        /* La mise au point ne fait plus défiler quoi que ce soit : le panneau
+           est ramené dans le cadre avant d'être montré. */
+        panneau.querySelector('a.outils-lien')?.focus();
     });
 }

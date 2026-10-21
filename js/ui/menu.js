@@ -37,6 +37,34 @@ if (typeof document !== 'undefined') {
 }
 
 /**
+ * Pose un élément flottant à un point de l'écran, entièrement visible.
+ *
+ * Deux règles, et c'est tout ce qui fait la différence entre un menu qui
+ * fonctionne et un menu qui ne fonctionne pas :
+ *
+ * 1. **L'élément vit dans le `body`**, pas chez celui qui l'ouvre. Posé dans
+ *    le bandeau, il héritait de son `overflow: hidden` : il s'y trouvait
+ *    écrêté — on n'en voyait que la première entrée — et sa mise au point
+ *    faisait défiler le bandeau, qui paraissait alors sauter de vingt pixels.
+ *    Un élément flottant ne doit rien devoir à la boîte qui le déclenche.
+ * 2. **Il est mesuré hors écran puis ramené dans le cadre**, pour qu'un menu
+ *    ouvert près d'un bord reste entièrement visible.
+ *
+ * @param x, y  coin haut-gauche souhaité, en coordonnées de la fenêtre
+ */
+export function poserFlottant(element, x, y, marge = 8) {
+    element.style.left = '-9999px';
+    element.style.top = '0';
+    if (!element.isConnected) document.body.appendChild(element);
+    const taille = element.getBoundingClientRect();
+    const gauche = Math.min(x, window.innerWidth  - taille.width  - marge);
+    const haut   = Math.min(y, window.innerHeight - taille.height - marge);
+    element.style.left = Math.max(marge, gauche) + 'px';
+    element.style.top  = Math.max(marge, haut) + 'px';
+    return element;
+}
+
+/**
  * Affiche le menu à l'emplacement du clic.
  * @param entrees [{ libelle, aide?, action, danger?, separateurAvant? }]
  */
@@ -78,17 +106,7 @@ export function afficherMenu(x, y, titre, entrees) {
         menu.appendChild(bouton);
     });
 
-    /* Placé hors écran le temps d'être mesuré, puis ramené dans le cadre :
-       un menu ouvert près d'un bord doit rester entièrement visible. */
-    menu.style.left = '-9999px';
-    menu.style.top = '0';
-    document.body.appendChild(menu);
-    const taille = menu.getBoundingClientRect();
-    const marge = 8;
-    const gauche = Math.min(x, window.innerWidth  - taille.width  - marge);
-    const haut   = Math.min(y, window.innerHeight - taille.height - marge);
-    menu.style.left = Math.max(marge, gauche) + 'px';
-    menu.style.top  = Math.max(marge, haut) + 'px';
+    poserFlottant(menu, x, y);
 
     ouvert = menu;
     document.addEventListener('keydown', surTouche, true);

@@ -385,6 +385,62 @@ met pas debout ; des libellés longs et sans ordre restent à l'horizontale, où
 ils tiennent. Le bouton ne sert alors qu'à passer outre. Les autres panneaux
 gardent leur défaut historique, le champ n'y changeant pas d'un mode à l'autre.
 
+## Navigation entre les outils
+
+Le menu en haut à gauche relie les applications de l'ensemble : ValoVizu,
+validExpertises, cleanKeywords. La liste est la constante `OUTILS` de
+`js/ui/outils.js` — c'est le seul endroit à tenir à jour.
+
+**Les chemins sont relatifs**, et les applications supposées voisines sur le
+serveur. Ces liens ont d'abord été des préférences, conservées dans le
+navigateur, pour ne pas publier d'adresses internes ni devoir toucher au code
+pour ajouter un outil. Le motif était juste, et la forme relative le désamorce
+entièrement : rien d'interne ne part dans le dépôt, et la suite fonctionne où
+qu'elle soit déployée. Une adresse absolue le réintroduirait.
+
+**La raison du changement est plus forte que le motif qu'il écarte.** Une
+préférence vit par poste : un collègue ouvrant l'outil ne voyait aucun lien, et
+l'ensemble n'existait que pour celui qui l'avait configuré — l'inverse de ce
+qu'un menu de navigation entre applications doit montrer.
+
+**L'application courante figure dans la liste**, marquée, mais n'est pas un
+lien : un renvoi vers la page où l'on se trouve déjà n'a rien à offrir. Son
+repère est un filet à gauche et non un fond teinté, le fond étant déjà la
+marque de l'entrée survolée ou au clavier.
+
+**Les outils voisins remplacent la page ; l'instance Omeka S s'ouvre à côté.**
+Les premiers sont des pages de la même suite, la seconde une base qu'on va
+consulter sans quitter son travail. Elle reste déduite de l'adresse de l'API,
+et non écrite dans la liste : elle change d'un déploiement à l'autre.
+
+## Éléments flottants
+
+Menu contextuel, boîte à outils : tout ce qui se pose par-dessus la page suit
+la même règle, portée par `poserFlottant()` dans `js/ui/menu.js`.
+
+**L'élément vit dans le `body`**, jamais chez celui qui l'ouvre, et il est posé
+en coordonnées de fenêtre. La boîte à outils avait d'abord été posée sous son
+bouton, donc à l'intérieur du bandeau — qui porte `overflow: hidden` pour
+écrêter sa décoration. Deux conséquences, pour une seule cause : le panneau
+était coupé après sa première entrée, trois liens sur quatre restant présents
+dans le document mais hors d'atteinte ; et le bandeau sautait de vingt pixels,
+parce qu'`overflow: hidden` en fait un conteneur de défilement et que la mise
+au point du premier lien, situé hors de la boîte écrêtée, le faisait défiler
+pour l'amener à l'écran.
+
+**Il est mesuré hors écran, puis ramené dans le cadre**, pour qu'un menu ouvert
+près d'un bord reste entièrement visible.
+
+**Il se referme au défilement et au redimensionnement.** N'ayant plus d'attache
+à la page, il flotterait sinon en arrière du bouton qui l'a ouvert.
+
+Ce défaut a été livré avec l'ensemble des vérifications au vert, et c'était
+inévitable : jsdom n'a pas de moteur de rendu, `getBoundingClientRect` y
+renvoie des zéros. Aucune vérification en jsdom ne peut voir qu'un élément
+déborde, est écrêté, ou déplace ses voisins. D'où `test/mise-en-page.mjs`, qui
+mesure la géométrie dans un vrai navigateur — la seule suite à demander une
+dépendance, et la seule à savoir regarder cette famille de défauts.
+
 ## Nuage de mots
 
 Les mots-clés s'affichent en nuage plutôt qu'en barres. Ni le regroupement ni

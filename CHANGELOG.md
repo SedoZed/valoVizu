@@ -15,6 +15,112 @@ invalidées et rechargées depuis l'API au premier affichage.
 
 ---
 
+## [1.0.3] — 2026-10-20
+
+### Modifié
+
+- **Le bouton des outils est ancré au bord gauche du bandeau**, et non plus au
+  début du bloc centré. Chaque application de la suite centre son en-tête sur
+  la largeur de son propre contenu — 1440 px ici, 960 ailleurs — si bien que le
+  bouton se déplaçait de près de deux cents pixels au passage de l'une à
+  l'autre, et d'autant plus que l'écran était large. Il se trouve désormais au
+  même pixel partout.
+  Il est posé à 18 px du haut plutôt que centré verticalement : les bandeaux
+  n'ont pas la même hauteur, et celui de cet outil grandit sous 1100 px quand
+  ses onglets reviennent à la ligne. Un bouton centré se serait décalé
+  d'autant.
+  **Le titre ne bouge pas** : le rembourrage gauche du bloc centré reprend
+  exactement la place que le bouton occupait dans le flux — 24 de marge, 34 de
+  bouton, 28 d'écart.
+
+## [1.0.2] — 2026-10-20
+
+### Modifié
+
+- **Les outils de l'écosystème sont écrits dans le code**, dans la constante
+  `OUTILS` de `js/ui/outils.js`, au lieu d'être réglés par chacun et conservés
+  dans son navigateur. Le motif d'origine — ne pas publier d'adresses internes,
+  ne pas toucher au code pour ajouter un outil — est désamorcé par la **forme
+  relative** des chemins (`../validExpertises/index.html`) : rien d'interne ne
+  part dans le dépôt, et la suite fonctionne où qu'elle soit déployée pourvu
+  que les dossiers restent voisins.
+  La raison du changement est plus forte que le motif qu'il écarte : une
+  préférence vit **par poste**, si bien qu'un collègue ouvrant l'outil ne
+  voyait aucun lien. L'écosystème n'existait que pour celui qui l'avait
+  configuré — l'inverse de ce qu'un menu de navigation entre applications doit
+  montrer.
+- **L'application courante figure dans le menu**, marquée d'un repère et de
+  « vous êtes ici », sans être un lien : un renvoi vers la page où l'on se
+  trouve déjà n'a rien à offrir.
+- **Les outils voisins remplacent la page**, là où tous les liens partaient
+  auparavant dans un nouvel onglet. Ce sont des pages de la même suite, non
+  des références extérieures. Seule l'instance Omeka S garde son onglet : on y
+  va vérifier une fiche, pas quitter l'outil.
+- L'instance Omeka S reste **déduite** de l'adresse de l'API et détachée du
+  reste par un filet : elle change d'un déploiement à l'autre, et n'est pas un
+  outil de la suite mais la base qu'ils interrogent tous.
+
+### Retiré
+
+- L'entrée « Gérer les liens… » et l'onglet *Outils* de la fenêtre de
+  configuration — champs, bouton d'ajout, liste supprimable —, ainsi que
+  `ajouterOutil()`, `retirerOutil()` et `adresseOutilValide()`. La fenêtre de
+  configuration passe de quatre onglets à trois.
+- La préférence `outils`. Une clé restée dans un navigateur est ignorée.
+
+---
+
+## [1.0.1] — 2026-10-20
+
+Correction du menu de la boîte à outils, et ouverture d'une suite de
+vérifications que les autres ne pouvaient pas remplacer.
+
+### Corrigé
+
+- **Le menu de la boîte à outils était écrêté et faisait sauter le bandeau.**
+  Une seule cause, deux symptômes. Le panneau était posé sous le bouton, donc
+  à l'intérieur du bandeau, qui porte `overflow: hidden` pour écrêter sa
+  décoration. D'où (1) un panneau coupé après sa première entrée — trois des
+  quatre liens étaient présents dans le document mais hors d'atteinte — et (2)
+  un bandeau qui sautait de vingt pixels, parce qu'`overflow: hidden` en fait
+  un conteneur de défilement et que la mise au point du premier lien, situé
+  hors de la boîte écrêtée, le faisait défiler pour l'amener à l'écran.
+  Le panneau vit désormais dans le `body`, posé en coordonnées de fenêtre,
+  comme le menu contextuel de l'outil. Il se referme au défilement et au
+  redimensionnement, n'ayant plus d'attache à la page.
+- L'intitulé du bouton réservé aux lecteurs d'écran s'ancrait sur la zone
+  entourant le bouton plutôt que sur le bouton lui-même. Sans conséquence
+  visible, même origine.
+
+### Modifié
+
+- `poserFlottant()` dans `js/ui/menu.js` : la règle de placement d'un élément
+  flottant — vivre dans le `body`, être mesuré hors écran puis ramené dans le
+  cadre — est extraite et partagée par le menu contextuel et la boîte à
+  outils. Deux implémentations divergentes en faisaient une correcte et une
+  cassée.
+
+### Ajouté
+
+- **`test/mise-en-page.mjs`** : vérifications dans un vrai navigateur. jsdom
+  n'a pas de moteur de rendu — `getBoundingClientRect` y renvoie des zéros —,
+  si bien qu'aucune des 968 vérifications existantes ne pouvait voir qu'un
+  élément déborde, est écrêté ou déplace ses voisins. C'est précisément
+  pourquoi ce défaut a été livré avec tout au vert. La suite mesure le
+  déplacement des éléments du bandeau, le défilement parasite, et le nombre
+  d'entrées réellement atteignables — « présent dans le document » et
+  « cliquable » étant deux choses différentes.
+  Elle demande Playwright, qui n'est pas une dépendance de l'outil : faute de
+  l'y trouver, elle passe son tour en le disant plutôt qu'en échouant, et
+  `tout.sh` reste exécutable avec Node seul.
+- Garde-fous moins coûteux pour la même règle : la structure est vérifiée dans
+  `interface.mjs` (le panneau est dans le `body`, hors du bandeau) et la
+  déclaration dans `styles.mjs` (les éléments flottants sont en
+  `position: fixed`). Ils ne voient pas le symptôme, mais ils voient la cause,
+  et ils tournent sans navigateur.
+
+---
+
 ## [1.0.0] — 2026-09-25
 
 Refonte complète du panneau *Montants*, après deux versions écartées. Le détail
@@ -268,15 +374,18 @@ et chaque geste dans une figure agit sur la sélection commune.
 ## Vérifications
 
 L'outil n'a pas de dépendance d'exécution et ses vérifications tournent avec
-Node seul : `sh test/tout.sh`.
+Node seul : `sh test/tout.sh`. Seule `mise-en-page.mjs` demande un vrai
+navigateur (`npm install --no-save playwright`) ; sans lui elle passe son tour
+et les autres s'exécutent normalement.
 
 | Suite | Objet | Vérifications |
 |---|---|---|
 | `test/moteur.mjs` | sélection, regroupements, lecture des données | 233 |
-| `test/interface.mjs` | parcours complet dans jsdom | 482 |
+| `test/interface.mjs` | parcours complet dans jsdom | 488 |
 | `test/effets.mjs` | effets de bord, géométrie des figures | 227 |
-| `test/styles.mjs` | feuille de style, contrastes | 26 |
-| | **total** | **968** |
+| `test/styles.mjs` | feuille de style, contrastes | 28 |
+| `test/mise-en-page.mjs` | géométrie réelle, dans Chromium | 9 |
+| | **total** | **985** |
 
 Méthode suivie à chaque correction : écrire la vérification, **saboter le code**
 et confirmer qu'elle échoue. Plusieurs vérifications ont passé alors que le

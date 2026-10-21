@@ -626,7 +626,7 @@ t('facette Durée conservée', titresFacettes.includes('Durée'));
 
 /* Onglets de la configuration */
 const ongletsModale = w.document.querySelectorAll('.onglets-modale .onglet');
-t('quatre onglets de configuration', ongletsModale.length === 4,
+t('trois onglets de configuration', ongletsModale.length === 3,
   [...ongletsModale].map(o => o.textContent));
 t('volet connexion affiché par défaut', !$('volet-connexion').hidden);
 t('volet paramètres masqué', $('volet-parametres').hidden);
@@ -2007,6 +2007,11 @@ console.log(`  ${ok - avantFiches} vérifications passées`);
 console.log('\nBoîte à outils');
 const avantO = ok;
 
+/* La liste des outils est une constante du code, et non plus une préférence :
+   on la lit à la source pour que la vérification suive une modification de la
+   liste au lieu de la figer. */
+const { OUTILS } = await import('../js/ui/outils.js');
+
 const boutonOutils = $('outils-ouvrir');
 t('bouton de boîte à outils présent', !!boutonOutils);
 t('replié par défaut', boutonOutils.getAttribute('aria-expanded') === 'false');
@@ -2015,56 +2020,72 @@ boutonOutils.click();
 await attendre(40);
 let panneauOutils = w.document.querySelector('.outils-panneau');
 t('panneau ouvert au clic', !!panneauOutils);
-t('l’instance Omeka S est proposée d’office',
-  [...panneauOutils.querySelectorAll('.outils-lien')]
-      .some(a => a.textContent.includes('Omeka S')),
-  [...panneauOutils.querySelectorAll('.outils-lien')].map(a => a.textContent));
+
+const entreesOutils = [...panneauOutils.querySelectorAll('.outils-lien')];
+const nomsOutils = entreesOutils.map(e => e.textContent);
+
+/* Les outils de la suite sont écrits dans le code, non réglés par chacun :
+   une préférence vit par poste, et l'écosystème n'existait alors que pour
+   celui qui l'avait configuré. */
+t('les outils de la suite sont proposés',
+  OUTILS.every(o => nomsOutils.some(n => n.includes(o.nom))), nomsOutils);
+t('leurs adresses sont relatives',
+  OUTILS.filter(o => !o.courant)
+      .every(o => /^\.\.\//.test(o.chemin)),
+  OUTILS.map(o => o.chemin));
+t('aucune adresse absolue dans la liste',
+  !OUTILS.some(o => /^https?:/.test(o.chemin || '')), OUTILS.map(o => o.chemin));
+
+/* L'application courante figure dans la liste, mais un renvoi vers la page où
+   l'on se trouve déjà n'a rien à offrir. */
+const courante = panneauOutils.querySelector('.outils-lien--courant');
+t('l’application courante est marquée', !!courante, nomsOutils);
+t('elle n’est pas un lien',
+  courante && courante.tagName !== 'A' && !courante.getAttribute('href'),
+  courante?.tagName);
+t('elle se déclare comme la page en cours',
+  courante?.getAttribute('aria-current') === 'page');
+
+/* L'instance Omeka S reste déduite : elle change d'un déploiement à l'autre
+   et n'a rien à faire dans une liste fixe. */
+const omeka = entreesOutils.find(e => e.textContent.includes('Omeka S'));
+t('l’instance Omeka S est proposée d’office', !!omeka, nomsOutils);
 t('son adresse est déduite de celle de l’API',
-  panneauOutils.querySelector('a.outils-lien')?.getAttribute('href') === 'http://localhost',
-  panneauOutils.querySelector('a.outils-lien')?.getAttribute('href'));
-t('les liens s’ouvrent dans un nouvel onglet',
-  [...panneauOutils.querySelectorAll('a.outils-lien')]
-      .every(a => a.target === '_blank' && /noopener/.test(a.rel)));
-t('accès au réglage proposé',
-  !!panneauOutils.querySelector('.outils-regler'));
+  omeka?.getAttribute('href') === 'http://localhost', omeka?.getAttribute('href'));
+t('elle s’ouvre dans un nouvel onglet',
+  omeka?.target === '_blank' && /noopener/.test(omeka?.rel || ''));
+/* Les outils voisins, eux, remplacent la page : ce sont des pages de la même
+   suite, pas des références extérieures. */
+t('les outils voisins ne s’ouvrent pas dans un onglet',
+  entreesOutils.filter(e => e.tagName === 'A' && !e.textContent.includes('Omeka S'))
+      .every(e => !e.target),
+  entreesOutils.map(e => [e.textContent, e.target]));
+
+/* Le panneau vit dans le body, non sous le bouton. Posé dans le bandeau, il
+   héritait de son `overflow: hidden` : écrêté après sa première entrée, et sa
+   mise au point faisait défiler le bandeau, qui sautait de vingt pixels.
+   jsdom ne peut pas voir le symptôme — il n'a pas de moteur de rendu — mais
+   il peut voir la cause, qui est structurelle. Le symptôme lui-même est
+   mesuré dans `mise-en-page.mjs`. */
+t('le panneau est posé dans le body',
+  panneauOutils.parentElement === w.document.body,
+  panneauOutils.parentElement?.className || panneauOutils.parentElement?.tagName);
+t('le panneau n’est pas dans le bandeau',
+  !panneauOutils.closest('.bandeau'));
+t('ses coordonnées sont posées à l’ouverture',
+  !!panneauOutils.style.left && !!panneauOutils.style.top,
+  { left: panneauOutils.style.left, top: panneauOutils.style.top });
 
 w.document.body.click();
 await attendre(30);
 t('panneau refermé au clic extérieur', !w.document.querySelector('.outils-panneau'));
 
-/* Ajout d'un lien depuis la configuration. */
-$('outil-nom').value = 'Annuaire';
-$('outil-url').value = 'https://exemple.org/annuaire';
-$('outil-ajouter').click();
-await attendre(40);
-t('lien enregistré dans les préférences',
-  /Annuaire/.test(memoire.valo_preferences || ''), memoire.valo_preferences);
-
-boutonOutils.click();
-await attendre(40);
-panneauOutils = w.document.querySelector('.outils-panneau');
-t('le lien ajouté paraît dans le menu',
-  [...panneauOutils.querySelectorAll('.outils-lien')]
-      .some(a => a.textContent.includes('Annuaire')));
-w.document.body.click();
-await attendre(30);
-
-/* Une adresse incomplète est refusée : relative, elle viserait cette page. */
-$('outil-nom').value = 'Mauvais';
-$('outil-url').value = 'exemple.org/sans-protocole';
-$('outil-ajouter').click();
-await attendre(30);
-t('adresse incomplète refusée',
-  /complète/.test($('outil-erreur').textContent), $('outil-erreur').textContent);
-t('le lien fautif n’est pas enregistré',
-  !/Mauvais/.test(memoire.valo_preferences || ''));
-
-/* Retrait */
-const aRetirer = [...w.document.querySelectorAll('#outils-liste .liste-danger')];
-t('les liens réglés sont retirables', aRetirer.length === 1, aRetirer.length);
-aRetirer[0].click();
-await attendre(40);
-t('lien retiré', !/Annuaire/.test(memoire.valo_preferences || ''));
+/* L'écran de réglage des liens a été retiré avec eux : plus rien à y régler.
+   On vérifie qu'il ne subsiste pas de commande orpheline. */
+t('plus d’onglet de réglage des outils', !$('volet-outils'));
+t('plus de champ d’ajout de lien', !$('outil-ajouter') && !$('outil-nom'));
+t('les préférences ne portent plus de liens',
+  !/\"outils\"/.test(memoire.valo_preferences || ''), memoire.valo_preferences);
 
 console.log(`  ${ok - avantO} vérifications passées`);
 

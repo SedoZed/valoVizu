@@ -33,10 +33,12 @@ export const DEFAUTS = {
        ouvre. Un seul registre confondrait les deux et inverserait l'état
        initial de la moitié des panneaux. */
     deplies: {},
-    /* Liens vers d'autres outils, réglés par l'utilisateur. Les inscrire dans
-       le code exposerait des adresses internes et imposerait de le modifier
-       pour en ajouter un. */
-    outils: [],
+    /* Les liens vers les autres outils ont été une préférence. Ils n'en sont
+       plus une : une préférence vit par poste, et l'écosystème n'existait
+       alors que pour celui qui l'avait configuré. Ils sont écrits dans
+       `ui/outils.js`, sous forme relative — rien d'interne ne part donc dans
+       le dépôt publié, ce qui était le motif de les en sortir.
+       Une clé `outils` restée dans un navigateur est simplement ignorée. */
 };
 
 export const preferences = { ...DEFAUTS };

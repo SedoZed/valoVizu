@@ -29,8 +29,7 @@ import { exporterSvg, exporterPng, nomFichier } from './ui/exportFigure.js';
 import { rendreLegende, brancherCopie, texteLegende, texteSource } from './ui/legende.js';
 import { depuisAdresse, ecrireAdresse, lienCourant } from './core/adresse.js';
 import { Historique } from './core/historique.js';
-import { brancherOutils, liensOutils, ajouterOutil, retirerOutil,
-         adresseOutilValide } from './ui/outils.js';
+import { brancherOutils } from './ui/outils.js';
 import { identifiantOmeka } from './core/champs.js';
 import { attacherMenu } from './ui/menu.js';
 import { ouvrirListe } from './ui/liste.js';
@@ -815,28 +814,7 @@ const app = {
             this._message('Paramètres d’affichage rétablis.');
         });
 
-        brancherOutils($('outils-ouvrir'), () => {
-            $('config-ouvrir').click();
-            document.querySelector('.onglets-modale .onglet[data-volet="volet-outils"]')?.click();
-        });
-
-        $('outil-ajouter')?.addEventListener('click', () => {
-            const nom = $('outil-nom').value.trim();
-            const url = $('outil-url').value.trim();
-            if (!nom) { $('outil-erreur').textContent = 'Donnez un nom à ce lien.'; return; }
-            if (!adresseOutilValide(url)) {
-                $('outil-erreur').textContent = 'L’adresse doit être complète, '
-                    + 'commençant par http:// ou https://';
-                return;
-            }
-            $('outil-erreur').textContent = '';
-            ajouterOutil(nom, url);
-            $('outil-nom').value = '';
-            $('outil-url').value = '';
-            this._rendreOutils();
-        });
-
-        this._rendreOutils();
+        brancherOutils($('outils-ouvrir'));
 
         $('accueil-configurer')?.addEventListener('click', () => {
             $('config-ouvrir').click();
@@ -1017,50 +995,6 @@ const app = {
         tete.appendChild(boite);
     },
 
-    /** Liste des liens réglés, dans l'écran de configuration. */
-    _rendreOutils() {
-        const hote = $('outils-liste');
-        if (!hote) return;
-        hote.innerHTML = '';
-        const liens = liensOutils();
-        if (!liens.length) {
-            hote.innerHTML = '<p class="note">Aucun lien enregistré.</p>';
-            return;
-        }
-        const liste = document.createElement('ul');
-        liste.className = 'liste-valeurs';
-        let rang = 0;
-        liens.forEach(lien => {
-            const li = document.createElement('li');
-            li.className = 'liste-ligne';
-            const nom = document.createElement('span');
-            nom.className = 'liste-nom';
-            nom.textContent = lien.nom;
-            nom.title = lien.url;
-            li.appendChild(nom);
-            if (lien.deduit) {
-                /* L'instance est déduite de l'adresse de l'API : la retirer
-                   ici n'aurait pas de sens, elle suit la configuration. */
-                const note = document.createElement('span');
-                note.className = 'liste-nombre';
-                note.textContent = 'déduit';
-                li.appendChild(note);
-            } else {
-                const indice = rang++;
-                const retirer = document.createElement('button');
-                retirer.type = 'button';
-                retirer.className = 'liste-action liste-danger';
-                retirer.textContent = 'Retirer';
-                retirer.addEventListener('click', () => {
-                    retirerOutil(indice);
-                    this._rendreOutils();
-                });
-                li.appendChild(retirer);
-            }
-            liste.appendChild(li);
-        });
-        hote.appendChild(liste);
-    },
 
     /**
      * Fiche Omeka S d'une valeur, lorsqu'elle provient d'un item lié.

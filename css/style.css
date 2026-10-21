@@ -133,6 +133,11 @@ main { max-width: 1440px; margin: 0 auto; padding: 0 24px 72px; }
 .bandeau-inner {
   max-width: 1440px; margin: 0 auto; padding: 18px 24px;
   display: flex; align-items: center; gap: 28px;
+  /* Le rembourrage gauche reprend exactement la place que le bouton des outils
+     occupait dans le flux — 24 de marge, 34 de bouton, 28 d'écart — de sorte
+     que le titre ne bouge pas d'un pixel alors que le bouton, lui, passe au
+     bord du bandeau. */
+  padding-left: 86px;
 }
 .surtitre {
   font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
@@ -927,8 +932,19 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
 
 /* ---------- Boîte à outils ---------- */
 
-.outils-zone { position: relative; flex: none; }
+/* Le bouton est ancré au bord gauche du bandeau plutôt qu'au début du bloc
+   centré. D'un outil de la suite à l'autre, il se trouve ainsi toujours au même
+   endroit de l'écran : les trois applications n'ont pas la même largeur de
+   contenu, et un bouton centré avec le contenu se déplaçait de près de deux
+   cents pixels au passage de l'une à l'autre. */
+.outils-zone {
+  position: absolute; left: 24px; top: 0; bottom: 0;
+  display: flex; align-items: flex-start; padding-top: 18px;
+}
+/* Le bouton porte le repère de position, pour que son intitulé réservé aux
+   lecteurs d'écran s'ancre sur lui et non sur la zone qui l'entoure. */
 .outils-bouton {
+  position: relative;
   width: 34px; height: 34px; padding: 0;
   background: none; border: 1px solid var(--filet);
   border-radius: var(--rayon); cursor: pointer;
@@ -950,8 +966,13 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
 .outils-bouton:hover .outils-barres::before,
 .outils-bouton:hover .outils-barres::after { background: var(--signal); }
 
+/* Posé dans le `body` et en coordonnées de fenêtre, comme le menu contextuel.
+   Tant qu'il vivait sous le bouton, il héritait de l'`overflow: hidden` du
+   bandeau : écrêté après sa première entrée, et sa mise au point faisait
+   défiler le bandeau, qui paraissait sauter. Les coordonnées sont posées par
+   `poserFlottant`, qui le ramène dans le cadre. */
 .outils-panneau {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 200;
+  position: fixed; z-index: 200;
   min-width: 230px; padding: 4px 0;
   background: var(--carte); border: 1px solid var(--filet);
   border-radius: var(--rayon); box-shadow: var(--ombre-modale);
@@ -965,10 +986,18 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
 .outils-lien:hover, .outils-lien:focus {
   background: var(--signal-2); color: var(--signal); outline: none;
 }
+/* L'application courante figure dans la liste — sans quoi le menu dirait mal
+   où l'on se trouve — mais n'est pas un lien. Elle doit donc se distinguer
+   sans se présenter comme cliquable. */
+.outils-lien--courant {
+  color: var(--signal); font-weight: 500; cursor: default;
+  /* Repère à gauche plutôt que fond teinté : le fond est déjà la marque de
+     l'entrée sous le curseur ou au clavier, et les deux se confondaient. */
+  box-shadow: inset 3px 0 0 var(--signal);
+}
 .outils-note {
   font-family: var(--mono); font-size: 10.5px; color: var(--encre-3); flex: none;
 }
-.outils-regler { color: var(--encre-2); }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;

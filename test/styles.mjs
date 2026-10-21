@@ -233,6 +233,17 @@ const soulignes = [...css.matchAll(/([^{}]+)\{([^}]*text-decoration\s*:\s*underl
     .filter(sel => !/\.lien|\.mot|a[:.\s]|\ba\b/.test(sel));
 t('soulignement réservé aux liens', soulignes.length === 0, soulignes);
 
+/* Les éléments flottants — menu contextuel, boîte à outils — se posent en
+   coordonnées de fenêtre. Repassés en `absolute`, ils redeviennent tributaires
+   de la boîte qui les contient : la boîte à outils s'écrêtait ainsi dans
+   l'`overflow: hidden` du bandeau. La règle se vérifie ici ; son effet se
+   mesure dans `mise-en-page.mjs`, qui demande un vrai navigateur. */
+const bloc = nom => (css.match(new RegExp('\\.' + nom + '\\s*\\{([^}]*)\\}')) || [])[1] || '';
+['menu-contextuel', 'outils-panneau'].forEach(nom => {
+    t(`${nom} est posé en coordonnées de fenêtre`,
+      /position:\s*fixed/.test(bloc(nom)), bloc(nom).slice(0, 80));
+});
+
 console.log(`  ${ok} vérifications passées`);
 console.log(`\n${ok} passées, ${ko} échouées\n`);
 process.exit(ko ? 1 : 0);
