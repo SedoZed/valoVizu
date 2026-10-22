@@ -977,8 +977,27 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
   background: var(--carte); border: 1px solid var(--filet);
   border-radius: var(--rayon); box-shadow: var(--ombre-modale);
 }
+/* En-tête, pastille et ligne de version alignent ce menu sur celui des deux
+   autres outils de la suite : il est l'élément qu'ils ont en commun, il ne
+   doit pas se présenter différemment de l'un à l'autre. */
+.outils-entete {
+  font-family: var(--mono); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--encre-3); padding: 8px 14px 4px;
+}
+.outils-pastille {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: color-mix(in srgb, var(--encre) 22%, transparent);
+}
+.outils-lien--courant .outils-pastille { background: var(--signal); }
+.outils-version {
+  font-family: var(--mono); font-size: 10.5px; color: var(--encre-3);
+  padding: 5px 14px 6px; margin-top: 3px;
+  border-top: 1px solid var(--filet-doux);
+}
+
 .outils-lien {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   width: 100%; padding: 8px 14px; border: 0; background: none;
   font-family: var(--corps); font-size: 13.5px; color: var(--encre);
   text-align: left; text-decoration: none; cursor: pointer;
@@ -990,13 +1009,19 @@ body, .bandeau, .colonne-filtres, .panneau, .indicateur,
    où l'on se trouve — mais n'est pas un lien. Elle doit donc se distinguer
    sans se présenter comme cliquable. */
 .outils-lien--courant {
-  color: var(--signal); font-weight: 500; cursor: default;
-  /* Repère à gauche plutôt que fond teinté : le fond est déjà la marque de
-     l'entrée sous le curseur ou au clavier, et les deux se confondaient. */
-  box-shadow: inset 3px 0 0 var(--signal);
+  font-weight: 500; cursor: default;
+  /* Fond neutre et pastille colorée, comme dans les deux autres outils. Le
+     filet à gauche avait été préféré parce qu'un fond teinté se confondait
+     avec celui de l'entrée au clavier — le panneau met la mise au point sur
+     le premier lien à l'ouverture. La confusion disparaît ici parce que les
+     deux fonds ne sont plus de la même famille : `--filet-doux` est un gris
+     chaud, le survol et le focus portent `--signal-2`, un rose pâle, et la
+     pastille Raspberry n'appartient qu'à l'entrée courante. */
+  background: var(--filet-doux);
 }
 .outils-note {
   font-family: var(--mono); font-size: 10.5px; color: var(--encre-3); flex: none;
+  margin-left: auto;
 }
 
 .sr-only {

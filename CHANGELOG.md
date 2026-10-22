@@ -15,6 +15,32 @@ invalidées et rechargées depuis l'API au premier affichage.
 
 ---
 
+## [1.0.4] — 2026-10-22
+
+### Modifié
+
+- **Le menu des outils se présente comme celui des deux autres applications**
+  de la suite : en-tête « Outils », pastille et émoji devant chaque entrée,
+  ligne de version en bas. C'est l'élément que les trois outils ont en commun ;
+  il ne doit pas se présenter différemment de l'un à l'autre.
+- **L'application courante est marquée par un fond neutre et une pastille
+  Raspberry**, et non plus par un filet vertical. Ce filet avait été préféré
+  parce qu'un fond teinté se confondait avec celui de l'entrée au clavier — le
+  panneau met la mise au point sur le premier lien à l'ouverture. La confusion
+  ne peut plus se produire : les deux fonds ne sont plus de la même famille,
+  `--filet-doux` étant un gris chaud quand le survol et le focus portent
+  `--signal-2`, un rose pâle, et la pastille Raspberry n'appartenant qu'à
+  l'entrée courante.
+- La note « vous êtes ici » disparaît, devenue redondante avec le fond et la
+  pastille. Celle de l'instance Omeka S est conservée : « instance » dit
+  quelque chose que rien d'autre ne dit.
+
+### Ajouté
+
+- **Une constante `VERSION`** dans `js/ui/outils.js`, affichée au bas du menu.
+  Elle ne vivait jusqu'ici que dans ce journal. **À reprendre à chaque entrée :
+  rien ne la vérifie automatiquement.**
+
 ## [1.0.3] — 2026-10-20
 
 ### Modifié

@@ -41,10 +41,19 @@ import { poserFlottant } from './menu.js';
  * renvoie nulle part.
  */
 export const OUTILS = [
-    { nom: 'ValoVizu', aide: 'vous êtes ici', courant: true },
-    { nom: 'validExpertises', chemin: '../validExpertises/index.html' },
-    { nom: 'cleanKeywords', chemin: '../validKeyword/index.html' },
+    { nom: 'ValoVizu',        emoji: '📊', courant: true },
+    { nom: 'validExpertises', emoji: '✅', chemin: '../validExpertises/index.html' },
+    { nom: 'cleanKeywords',   emoji: '🧹', chemin: '../validKeyword/index.html' },
 ];
+
+/**
+ * Version affichée au bas du menu.
+ *
+ * Les trois outils de la suite présentent la leur au même endroit ; celle-ci
+ * ne vivait jusqu'ici que dans le journal des modifications. **À reprendre à
+ * chaque entrée du CHANGELOG** : rien ne la vérifie automatiquement.
+ */
+export const VERSION = '1.0.4';
 
 /** Racine de l'instance, déduite de l'adresse de l'API. */
 export function racineOmeka() {
@@ -62,7 +71,7 @@ export function liensOutils() {
     const liens = OUTILS.map(o => ({ ...o, url: o.courant ? '' : o.chemin }));
     const racine = racineOmeka();
     if (racine) {
-        liens.push({ nom: 'Omeka S', url: racine, aide: 'instance', deduit: true });
+        liens.push({ nom: 'Omeka S', emoji: '🗄️', url: racine, aide: 'instance', deduit: true });
     }
     return liens;
 }
@@ -106,6 +115,15 @@ export function brancherOutils(bouton) {
         panneau.className = 'outils-panneau';
         panneau.setAttribute('role', 'menu');
 
+        /* En-tête, pastilles et ligne de version : le menu se présente de la
+           même façon dans les trois outils de la suite. Ces deux éléments
+           portent leurs propres classes — les porter en `.outils-lien` les
+           ferait compter comme des entrées. */
+        const entete = document.createElement('div');
+        entete.className = 'outils-entete';
+        entete.textContent = 'Outils';
+        panneau.appendChild(entete);
+
         liensOutils().forEach((lien, i) => {
             /* L'instance est séparée des outils : elle n'appartient pas à la
                suite, elle est ce que la suite interroge. */
@@ -135,8 +153,12 @@ export function brancherOutils(bouton) {
                 entree.setAttribute('aria-current', 'page');
             }
 
+            const pastille = document.createElement('span');
+            pastille.className = 'outils-pastille';
+            entree.appendChild(pastille);
+
             const nom = document.createElement('span');
-            nom.textContent = lien.nom;
+            nom.textContent = (lien.emoji ? lien.emoji + ' ' : '') + lien.nom;
             entree.appendChild(nom);
             if (lien.aide) {
                 const note = document.createElement('span');
@@ -146,6 +168,11 @@ export function brancherOutils(bouton) {
             }
             panneau.appendChild(entree);
         });
+
+        const ligneVersion = document.createElement('div');
+        ligneVersion.className = 'outils-version';
+        ligneVersion.textContent = 'v' + VERSION;
+        panneau.appendChild(ligneVersion);
 
         /* Le panneau vit dans le `body`, et non sous le bouton.
            Posé dans le bandeau, il héritait de son `overflow: hidden` : on
